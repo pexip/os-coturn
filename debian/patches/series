@@ -1,1 +1,2 @@
 Set-logging-to-syslog.patch
+disable-http-and-cli.patch
