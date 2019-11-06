@@ -1,8 +1,9 @@
 Source: coturn
 Section: net
 Priority: optional
-Maintainer: Debian VoIP Team <pkg-voip-maintainers@lists.alioth.debian.org>
-Uploaders: Daniel Pocock <daniel@pocock.pro>,
+Maintainer: Pexip AS <packaging@pexip.com>
+XSBC-Pexip-Original-Maintainer: Debian VoIP Team <pkg-voip-maintainers@lists.alioth.debian.org>
+XSBC-Pexip-Original-Uploaders: Daniel Pocock <daniel@pocock.pro>,
            Oleg Moskalenko <mom040267@gmail.com>,
            Mészáros Mihály <misi@majd.eu>
 Build-Depends: debhelper (>=11.0.0),
@@ -20,6 +21,7 @@ Standards-Version: 4.3.0
 Homepage: https://github.com/coturn/coturn/
 Vcs-Git: https://github.com/coturn/coturn.git -b debian/sid
 Vcs-Browser: https://github.com/coturn/coturn/tree/debian/sid
+XS-Pexip-Upstream: http://ftp.debian.org/debian/ buster
 
 Package: coturn
 Architecture: any
