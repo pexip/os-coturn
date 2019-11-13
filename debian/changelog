@@ -1,6 +1,7 @@
 coturn (4.5.1.1-1.1pexip1) pexip; urgency=medium
 
   * Prepare Pexip packaging
+  * Reduce dependencies and entirely disable web/cli admin
 
  -- Alan Ford <alan@pexip.com>  Wed, 06 Nov 2019 13:11:04 +0000
 
