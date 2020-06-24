@@ -1,3 +1,9 @@
+coturn (4.5.1.1-1.1pexip2) pexip; urgency=medium
+
+  * Add fix for CVE-2020-4067
+
+ -- John-Mark Bell <jmb@pexip.com>  Wed, 24 Jun 2020 11:39:33 +0100
+
 coturn (4.5.1.1-1.1pexip1) pexip; urgency=medium
 
   * Prepare Pexip packaging
