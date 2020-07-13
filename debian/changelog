@@ -1,3 +1,22 @@
+coturn (4.5.1.1-1.1+deb10u1pexip2) pexip; urgency=medium
+
+  * Merge back on top of Debian version 4.5.1.1-1.1+deb10u1
+  * Fix for CVE-2020-4067 is now the same as used in Debian, tiny
+    tweaks from what we had before
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Mon, 13 Jul 2020 14:51:20 +0100
+
+coturn (4.5.1.1-1.1+deb10u1) buster-security; urgency=high
+
+  * Non-maintainer upload by the Security Team.
+  * specially crafted HTTP POST request can lead to heap overflow which can
+    result in information leak (CVE-2020-6061) (Closes: #951876)
+  * specially crafted HTTP POST request can lead to server crash and denial of
+    service (CVE-2020-6062) (Closes: #951876)
+  * init with zero any new or reused stun buffers (CVE-2020-4067)
+
+ -- Salvatore Bonaccorso <carnil@debian.org>  Fri, 26 Jun 2020 10:49:56 +0200
+
 coturn (4.5.1.1-1.1pexip2) pexip; urgency=medium
 
   * Add fix for CVE-2020-4067
