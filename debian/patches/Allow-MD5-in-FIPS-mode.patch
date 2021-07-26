@@ -1,0 +1,55 @@
+From 6b01b6f450f5b1c51ee73bdd6f3e19a1a7abda08 Mon Sep 17 00:00:00 2001
+From: Byron Clark <byron@theclarkfamily.name>
+Date: Fri, 24 May 2019 00:16:36 +0000
+Subject: [PATCH] Allow MD5 in FIPS mode.
+
+This is one of those special cases where a non approved cryptographic
+algorithm is allowed when operating in FIPS mode. Inform OpenSSL that
+this is the case.
+
+In the STUN RFC the long-term credential mechanism requires that the key
+used in the HMAC-SHA1 generation be the MD5 of specific values:
+https://tools.ietf.org/html/rfc5389#section-15.4
+
+Since this is obfuscating parameters to be used in an approved
+cryptographic algorithm, this is allowed usage per the [FIPS 140-2 Implementation Guidance](https://csrc.nist.gov/csrc/media/projects/cryptographic-module-validation-program/documents/fips140-2/fips1402ig.pdf).
+See page 81.
+
+Without this change, coturn crashes when trying to set up any long-term
+credential mechanism.
+---
+ src/client/ns_turn_msg.c | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/src/client/ns_turn_msg.c b/src/client/ns_turn_msg.c
+index b015f4f5c..db761d19a 100644
+--- a/src/client/ns_turn_msg.c
++++ b/src/client/ns_turn_msg.c
+@@ -238,14 +238,25 @@ int stun_produce_integrity_key_str(uint8_t *uname, uint8_t *realm, uint8_t *upwd
+ #if OPENSSL_VERSION_NUMBER < 0x10100000L
+ 		unsigned int keylen = 0;
+ 		EVP_MD_CTX ctx;
+-		EVP_DigestInit(&ctx,EVP_md5());
++		EVP_MD_CTX_init(&ctx);
++#ifdef OPENSSL_FIPS
++		if (FIPS_mode()) {
++			EVP_MD_CTX_set_flags(&ctx,EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
++		}
++#endif
++		EVP_DigestInit_ex(&ctx,EVP_md5(), NULL);
+ 		EVP_DigestUpdate(&ctx,str,strl);
+ 		EVP_DigestFinal(&ctx,key,&keylen);
+ 		EVP_MD_CTX_cleanup(&ctx);
+ #else
+ 		unsigned int keylen = 0;
+ 		EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+-		EVP_DigestInit(ctx,EVP_md5());
++#ifdef OPENSSL_FIPS
++		if (FIPS_mode()) {
++			EVP_MD_CTX_set_flags(ctx, EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
++		}
++#endif
++		EVP_DigestInit_ex(ctx,EVP_md5(), NULL);
+ 		EVP_DigestUpdate(ctx,str,strl);
+ 		EVP_DigestFinal(ctx,key,&keylen);
+ 		EVP_MD_CTX_free(ctx);

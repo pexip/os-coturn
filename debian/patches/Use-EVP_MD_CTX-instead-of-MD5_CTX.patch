@@ -1,0 +1,41 @@
+From 68feff5ca3908e4c9427df8ba510f1a8c167c3d8 Mon Sep 17 00:00:00 2001
+From: Byron Clark <byron@theclarkfamily.name>
+Date: Fri, 24 May 2019 00:01:52 +0000
+Subject: [PATCH] Use EVP_MD_CTX instead of MD5_CTX.
+
+Switch to EVP_MD_CTX APIs for MD5 to match how other digest types are
+created in this function.
+---
+ src/client/ns_turn_msg.c | 19 +++++++++++++++----
+ 1 file changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/src/client/ns_turn_msg.c b/src/client/ns_turn_msg.c
+index 60483120e..b015f4f5c 100644
+--- a/src/client/ns_turn_msg.c
++++ b/src/client/ns_turn_msg.c
+@@ -235,10 +235,21 @@ int stun_produce_integrity_key_str(uint8_t *uname, uint8_t *realm, uint8_t *upwd
+ 		return -1;
+ #endif
+ 	} else {
+-		MD5_CTX ctx;
+-		MD5_Init(&ctx);
+-		MD5_Update(&ctx,str,strl);
+-		MD5_Final(key,&ctx);
++#if OPENSSL_VERSION_NUMBER < 0x10100000L
++		unsigned int keylen = 0;
++		EVP_MD_CTX ctx;
++		EVP_DigestInit(&ctx,EVP_md5());
++		EVP_DigestUpdate(&ctx,str,strl);
++		EVP_DigestFinal(&ctx,key,&keylen);
++		EVP_MD_CTX_cleanup(&ctx);
++#else
++		unsigned int keylen = 0;
++		EVP_MD_CTX *ctx = EVP_MD_CTX_new();
++		EVP_DigestInit(ctx,EVP_md5());
++		EVP_DigestUpdate(ctx,str,strl);
++		EVP_DigestFinal(ctx,key,&keylen);
++		EVP_MD_CTX_free(ctx);
++#endif
+ 	}
+ 
+ 	turn_free(str,sz+1);
