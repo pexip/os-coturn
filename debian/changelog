@@ -1,3 +1,9 @@
+coturn (4.5.1.1-1.1+deb10u2pexip2) pexip; urgency=medium
+
+  * Backport upstream MD5-in-FIPS-mode patches
+
+ -- John-Mark Bell <jmb@pexip.com>  Mon, 26 Jul 2021 16:47:17 +0000
+
 coturn (4.5.1.1-1.1+deb10u2pexip1) pexip; urgency=medium
 
   * New upstream release
