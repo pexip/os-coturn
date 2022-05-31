@@ -1,5 +1,5 @@
 Name:		turnserver
-Version:	4.5.1.1
+Version:	4.5.2
 Release:	0%{dist}
 Summary:	Coturn TURN Server
 
@@ -197,6 +197,8 @@ fi
 %{_datadir}/%{name}/testmongosetup.sh
 %{_datadir}/%{name}/testsqldbsetup.sql
 %dir %{_datadir}/%{name}/etc
+%{_datadir}/%{name}/etc/cacert.pem
+%{_datadir}/%{name}/etc/coturn.service
 %{_datadir}/%{name}/etc/turn_server_cert.pem
 %{_datadir}/%{name}/etc/turn_server_pkey.pem
 %{_datadir}/%{name}/etc/turnserver.conf
@@ -296,6 +298,8 @@ fi
 %{_includedir}/turn/client/TurnMsgLib.h
 
 %changelog
+* Sun jan 10 2 2021 Mészáros Mihály <misi@majd.eu>
+  - Sync to 4.5.2
 * Sat Mar 2 2019 Mészáros Mihály <misi@majd.eu>
   - Sync to 4.5.1.1
 * Thu Dec 6 2018 Mészáros Mihály <misi@majd.eu>

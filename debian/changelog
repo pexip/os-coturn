@@ -1,3 +1,163 @@
+coturn (4.5.2-3) unstable; urgency=medium
+
+  [ Ferenc Wágner ]
+  * [50ab417] Don't rely on the documentation being present for creating the DB.
+    Dpkg may be configured to omit installing files under /usr/share/doc.
+    Since the database schema is shipped in a private directory as well,
+    switch to using that instance instead. (Closes: #985054)
+  * [6f94ecb] Let the purge go through under unforeseen circumstances
+  * [d8f0a0a] Let debhelper do its business before the final cleanup
+  * [4033c69] Make the SQLite database writable by the turnserver user and
+    group.
+    File permissions alone aren't enough, the containing directory needs to
+    be writable as well.
+  * [81731d8] Ship the empty /var/lib/turndb directory for better
+    discoverability
+  * [34a2b34] Split up our autopkgtest into several tests
+
+  [ Mészáros Mihály ]
+  * [1666988] Add forwarded not-needed to
+    Fix-undefinded-OPENSSL_VERSION_1_1_1.patch
+
+ -- Mészáros Mihály <misi@majd.eu>  Wed, 24 Mar 2021 20:30:23 +0100
+
+coturn (4.5.2-2) unstable; urgency=medium
+
+  [ Michael Prokop ]
+  * [059ff0a] debian/coturn.postrm: fix check for dpkg-statoverride on package
+    removal. This fixes a regression introduced in commit b9a4a8.
+    While at it, also move the statoverride removal before the account removal.
+    (Closes: #981330)
+
+  [ Ferenc Wágner ]
+  * [e991e26] Enroll to basic Salsa-CI
+
+  [ Mészáros Mihály ]
+  * [3505b22] HotFix upstream undefinded OPENSSL_VERSION_1_1_1
+  * [20f9a9e] Add tls test to debian autopkgtest
+
+ -- Mészáros Mihály <misi@majd.eu>  Wed, 10 Feb 2021 22:03:27 +0100
+
+coturn (4.5.2-1) unstable; urgency=high
+
+  * [49df393] New upstream release (4.5.2)
+    - fix null pointer dereference in case of out of memory.(by Thomas Moeller)
+    - merge PR #517 (by wolmi)
+      add prometheus metrics
+    - merge PR #637 (by David Florness)
+      Delete trailing whitespace in example configuration files
+    - merge PR #631 (by Debabrata Deka)
+      Add architecture ppc64le to travis build
+    - merge PR #627 (by Samuel)
+      Fix misleading option in doc (prometheus)
+    - merge PR #643 (by tupelo-schneck)
+      Allow RFC6062 TCP relay data to look like TLS
+    - merge PR #655 (by plinss)
+      Add support for proxy protocol V1
+    - merge PR #618 (by Paul Wayper)
+      Print full date and time in logs
+      Add new options:
+      "new-log-timestamp" and "new-log-timestamp-format"
+    - merge PR #599 (by Cédric Krier)
+      Do not use FIPS and remove hardcode OPENSSL_VERSION_NUMBER with LibreSSL
+    - update Docker mongoDB and fix with workaround the missing systemctl
+    - merge PR #660 (by Camden Narzt)
+      fix compilation on macOS Big Sur
+    - merge PR #546 #551 #672 (by jelmd)
+      Add support of --acme-redirect <URL>
+      fix acme security, redundancy, consistency
+    - Disable binding request logging to avoid DoS attacks.(Breaking change!)
+      Add new --log-binding option to enable binding request logging
+    - Fix stale-nonce documentation. Resolves #604
+    - Version numbering is changed to semver 2.0
+    - Merge PR #288 (by Hristo Venev)
+      pkg-config, and various cleanups in configure file
+    - Add systemd notification for better systemd integration
+    - Fix Issue #621 (by ycaibb)
+      Null pointer dereference on tcp_client_input_handler_rfc6062data function
+    - Fix Issue #600 (by ycaibb)
+      use-after-free vulnerability on write_to_peerchannel function
+    - Fix Issue #601 (by ycaibb)
+      use-after-free vulnerability on write_client_connection function
+    - Little refactoring prometheus
+      Fix c++ support
+      Simplify (as agreed in Issue #666)
+      Remove session id/allocation labels
+      Remove per session metrics. We should later add more counters.
+    - Fix CVE-2020-26262 (credits: Enable-Security)
+      Fix ipv6 ::1 loopback check
+      Not allow allocate peer address 0.0.0.0/8 and ::/128
+      For more details see the github security advisory:
+      https://github.com/coturn/coturn/security/advisories/GHSA-6g6j-r9rf-cm7p
+  * [f0c1753] Change coturn service type to systemd notify (Closes: #934513)
+  * [f9b9547] Add libsystemd-dev to build dependency
+  * [5a811b1] Update watch version to 4
+  * [c0a645e] Update Debian Standards to 4.5.1
+  * [e429100] Patch not-needed to forwarded to upstream
+  * [bc56267] Add pkg-config to build dependency
+  * [bd98206] Postrm remove dir /var/lib/turn
+  * [8c58afe] Change sqlite db permissions.
+    Change owner to turnserver:turnserver and mode 660 (Closes: #930097)
+  * [b9a4a8b] Change config file permissions.
+    Change owner to root:turnserver and mode 640 (Closes: #954379)
+  * [3e85092] init.d script drop root privileges (Closes: 904415)
+  * [24eb87a] Add info about binding privileged ports (Closes: #964009)
+  * [136a8a2] Disable pid file creation
+
+ -- Mészáros Mihály <misi@majd.eu>  Mon, 11 Jan 2021 20:05:38 +0100
+
+coturn (4.5.1.3-1) unstable; urgency=medium
+
+  * [ec640a2] New upstream release (4.5.1.3)
+    - Fixes CVE-2020-6061
+      heap overflow vulnerability
+      Crafted HTTP POST request can lead to information leaks
+      and other misbehavior
+    - Fixes CVE-2020-6062
+      denial-of-service vulnerability
+      Crafted HTTP POST request can lead to server crash and denial of service
+    - Fixes CVE-2020-4067
+      STUN response buffer not initialized
+      One client (an attacker) could use their connection to intelligently
+      query coturn server to get interesting bytes in the padding bytes from
+      the connection of another client
+    - Tidy, and remove compatibility layers
+      * Remove turn_free_simple
+      * Remove turn_malloc()
+      * Remote turn_realloc()
+      * Remote turn_free()
+      * Remove turn_calloc()
+      * Remove turn_strdup()
+      * Remove SSL_NEW() and SSL_FREE()
+      * Remove pointer debugging machinery
+      * Remove ns_bzero(), ns_bcopy(), and ns_bcmp()
+      * Remove [su]{08,16,32,64}bits type defines
+    - Fix the webadmin ip permission add/delete sql injection
+    - Fix mongo driver crash when invalid connection string is used
+    - Change Diffie Hellman default key length from 1066 to 2066
+    - New test Certificate and test CA
+    - Fixes in packaging (rpm, docker)
+  * [1af9910] Remove patch for CVE 2020 6061+6062
+  * [82079ae] Update debehelper to debhelper-compat  and ver 13
+  * [60997b6] Add Pre-Depends
+  * [2830ed6] Add Rules-Requires-Root
+  * [f648d45] Update metadata
+  * [aca2929] Change Debian VoIP Team mailinglist
+  * [f2f1398] exclude CA from examples and docs
+  * [83c24b5] Add symlink turnutils_uclient > usr/bin/turnutils
+  * [1f2cd31] migrate bin from turnserver to coturn, symlink
+
+ -- Mészáros Mihály <misi@majd.eu>  Sat, 27 Jun 2020 17:24:51 +0200
+
+coturn (4.5.1.1-1.2) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Update Uploaders. (Closes: #953466)
+  * Fix "CVE-2020-6061 CVE-2020-6062" by applying upstream patch.
+    (Closes: #951876)
+
+ -- Tobias Frost <tobi@debian.org>  Mon, 13 Apr 2020 18:49:12 +0200
+
 coturn (4.5.1.1-1.1+deb10u2pexip2) pexip; urgency=medium
 
   * Backport upstream MD5-in-FIPS-mode patches
@@ -9,14 +169,6 @@ coturn (4.5.1.1-1.1+deb10u2pexip1) pexip; urgency=medium
   * New upstream release
 
  -- Steve McIntyre <steve.mcintyre@pexip.com>  Mon, 18 Jan 2021 16:08:43 +0000
-
-coturn (4.5.1.1-1.1+deb10u2) buster-security; urgency=high
-
-  * [c750a89] Fix-CVE-2020-26262-Enable-Security
-    - Fix ipv6 ::1 loopback check
-    - Not allow allocate peer address 0.0.0.0/8 and ::/128
-
- -- Mészáros Mihály <misi@majd.eu>  Tue, 15 Dec 2020 17:23:34 +0100
 
 coturn (4.5.1.1-1.1+deb10u1pexip4) pexip; urgency=medium
 
@@ -37,17 +189,6 @@ coturn (4.5.1.1-1.1+deb10u1pexip2) pexip; urgency=medium
     tweaks from what we had before
 
  -- Steve McIntyre <steve.mcintyre@pexip.com>  Mon, 13 Jul 2020 14:51:20 +0100
-
-coturn (4.5.1.1-1.1+deb10u1) buster-security; urgency=high
-
-  * Non-maintainer upload by the Security Team.
-  * specially crafted HTTP POST request can lead to heap overflow which can
-    result in information leak (CVE-2020-6061) (Closes: #951876)
-  * specially crafted HTTP POST request can lead to server crash and denial of
-    service (CVE-2020-6062) (Closes: #951876)
-  * init with zero any new or reused stun buffers (CVE-2020-4067)
-
- -- Salvatore Bonaccorso <carnil@debian.org>  Fri, 26 Jun 2020 10:49:56 +0200
 
 coturn (4.5.1.1-1.1pexip2) pexip; urgency=medium
 

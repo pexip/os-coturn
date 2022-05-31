@@ -29,6 +29,12 @@
  */
 
 #include "mainrelay.h"
+#include "dbdrivers/dbdriver.h"
+
+#if !defined(TURN_NO_PROMETHEUS)
+#include "prom_server.h"
+#endif
+
 
 #if (defined LIBRESSL_VERSION_NUMBER && OPENSSL_VERSION_NUMBER == 0x20000000L)
 #undef OPENSSL_VERSION_NUMBER
@@ -89,7 +95,7 @@ NULL,
 NULL,
 #endif
 
-DH_1066, "", "", "",
+DH_2066, "", "", "",
 "turn_server_cert.pem","turn_server_pkey.pem", "", "",
 0,0,0,
 #if !TLS_SUPPORTED
@@ -108,9 +114,9 @@ NULL, PTHREAD_MUTEX_INITIALIZER,
 
 //////////////// Common params ////////////////////
 TURN_VERBOSE_NONE,0,0,0,0,
-"/var/run/turnserver.pid",
-DEFAULT_STUN_PORT,DEFAULT_STUN_TLS_PORT,0,0,1,
-0,0,0,0,
+"/var/run/turnserver.pid","",
+DEFAULT_STUN_PORT,DEFAULT_STUN_TLS_PORT,0,0,0,1,
+0,0,0,0,0,
 "",
 "",0,
 {
@@ -149,6 +155,9 @@ TURN_CREDENTIALS_NONE, /* ct */
 0, /* bps_capacity_allocated */
 0, /* total_quota */
 0, /* user_quota */
+#if !defined(TURN_NO_PROMETHEUS)
+0, /* prometheus disabled by default */
+#endif
 ///////////// Users DB //////////////
 { (TURN_USERDB_TYPE)0, {"\0"}, {0,NULL, {NULL,0}} },
 ///////////// CPUs //////////////////
@@ -156,7 +165,12 @@ DEFAULT_CPUS_NUMBER,
 ///////// Encryption /////////
 "", /* secret_key_file */
 "", /* secret_key */
-0   /* keep_address_family */
+0,  /* keep_address_family */
+0,  /* no_auth_pings */
+0,  /* no_dynamic_ip_list */
+0,  /* no_dynamic_realms */
+
+0  /* log_binding */
 };
 
 //////////////// OpenSSL Init //////////////////////
@@ -359,7 +373,7 @@ int get_a_local_relay(int family, ioa_addr *relay_addr)
 				} else
 					continue;
 
-				if (make_ioa_addr((const u08bits*) saddr, 0, relay_addr) < 0) {
+				if (make_ioa_addr((const uint8_t*) saddr, 0, relay_addr) < 0) {
 					continue;
 				} else {
 					ret = 0;
@@ -401,6 +415,8 @@ static char Usage[] = "Usage: turnserver [options]\n"
 "                                                or in old RFC 3489 sense, default is \"listening port plus one\").\n"
 " --alt-tls-listening-port	<port>		Alternative listening port for TLS and DTLS,\n"
 " 						the default is \"TLS/DTLS port plus one\".\n"
+" --tcp-proxy-port		<port>		Support connections from TCP loadbalancer on this port. The loadbalancer should\n"
+"						use the binary proxy protocol (https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt)\n"
 " -L, --listening-ip		<ip>		Listener IP address of relay server. Multiple listeners can be specified.\n"
 " --aux-server			<ip:port>	Auxiliary STUN/TURN server listening endpoint.\n"
 "						Auxiliary servers do not have alternative ports and\n"
@@ -447,7 +463,7 @@ static char Usage[] = "Usage: turnserver [options]\n"
 " -v, --verbose					'Moderate' verbose mode.\n"
 " -V, --Verbose					Extra verbose mode, very annoying (for debug purposes only).\n"
 " -o, --daemon					Start process as daemon (detach from current shell).\n"
-" --prod       	 				Production mode: hide the software version.\n"
+" --no-software-attribute	 		Production mode: hide the software version (formerly --prod).\n"
 " -f, --fingerprint				Use fingerprints in the TURN messages.\n"
 " -a, --lt-cred-mech				Use the long-term credential mechanism.\n"
 " -z, --no-auth					Do not use any credential mechanism, allow anonymous access.\n"
@@ -481,7 +497,7 @@ static char Usage[] = "Usage: turnserver [options]\n"
 #if !defined(TURN_NO_PQ)
 " -e, --psql-userdb, --sql-userdb <conn-string>	PostgreSQL database connection string, if used (default - empty, no PostreSQL DB used).\n"
 "		                                This database can be used for long-term credentials mechanism users,\n"
-"		                                and it can store the secret value(s) for secret-based timed authentication in TURN RESP API.\n"
+"		                                and it can store the secret value(s) for secret-based timed authentication in TURN REST API.\n"
 "						See http://www.postgresql.org/docs/8.4/static/libpq-connect.html for 8.x PostgreSQL\n"
 "						versions format, see \n"
 "						http://www.postgresql.org/docs/9.2/static/libpq-connect.html#LIBPQ-CONNSTRING\n"
@@ -490,7 +506,7 @@ static char Usage[] = "Usage: turnserver [options]\n"
 #if !defined(TURN_NO_MYSQL)
 " -M, --mysql-userdb	<connection-string>	MySQL database connection string, if used (default - empty, no MySQL DB used).\n"
 "	                                	This database can be used for long-term credentials mechanism users,\n"
-"		                                and it can store the secret value(s) for secret-based timed authentication in TURN RESP API.\n"
+"		                                and it can store the secret value(s) for secret-based timed authentication in TURN REST API.\n"
 "						The connection string my be space-separated list of parameters:\n"
 "	        	          		\"host=<ip-addr> dbname=<database-name> user=<database-user> \\\n							password=<database-user-password> port=<db-port> connect_timeout=<seconds> read_timeout=<seconds>\".\n\n"
 "						The connection string parameters for the secure communications (SSL):\n"
@@ -507,12 +523,12 @@ static char Usage[] = "Usage: turnserver [options]\n"
 #if !defined(TURN_NO_MONGO)
 " -J, --mongo-userdb	<connection-string>	MongoDB connection string, if used (default - empty, no MongoDB used).\n"
 "	                                	This database can be used for long-term credentials mechanism users,\n"
-"		                                and it can store the secret value(s) for secret-based timed authentication in TURN RESP API.\n"
+"		                                and it can store the secret value(s) for secret-based timed authentication in TURN REST API.\n"
 #endif
 #if !defined(TURN_NO_HIREDIS)
 " -N, --redis-userdb	<connection-string>	Redis user database connection string, if used (default - empty, no Redis DB used).\n"
 "	                                	This database can be used for long-term credentials mechanism users,\n"
-"		                                and it can store the secret value(s) for secret-based timed authentication in TURN RESP API.\n"
+"		                                and it can store the secret value(s) for secret-based timed authentication in TURN REST API.\n"
 "						The connection string my be space-separated list of parameters:\n"
 "	        	          		\"host=<ip-addr> dbname=<db-number> \\\n								password=<database-user-password> port=<db-port> connect_timeout=<seconds>\".\n\n"
 "	        	          		All connection-string parameters are optional.\n\n"
@@ -521,6 +537,10 @@ static char Usage[] = "Usage: turnserver [options]\n"
 "	                                	This database keeps allocations status information, and it can be also used for publishing\n"
 "		                                and delivering traffic and allocation event notifications.\n"
 "						The connection string has the same parameters as redis-userdb connection string.\n"
+#endif
+#if !defined(TURN_NO_PROMETHEUS)
+" --prometheus					Enable prometheus metrics. It is disabled by default. If it is enabled it will listen on port 9641 unther the path /metrics\n"
+"						also the path / on this port can be used as a health check\n"
 #endif
 " --use-auth-secret				TURN REST API flag.\n"
 "						Flag that sets a special authorization option that is based upon authentication secret\n"
@@ -531,6 +551,9 @@ static char Usage[] = "Usage: turnserver [options]\n"
 "						That database value can be changed on-the-fly\n"
 "						by a separate program, so this is why it is 'dynamic'.\n"
 "						Multiple shared secrets can be used (both in the database and in the \"static\" fashion).\n"
+" --no-auth-pings				Disable periodic health checks to 'dynamic' auth secret tables.\n"
+" --no-dynamic-ip-list				Do not use dynamic allowed/denied peer ip list.\n"
+" --no-dynamic-realms				Do not use dynamic realm assignment and options.\n"
 " --server-name					Server name used for\n"
 "						the oAuth authentication purposes.\n"
 "						The default value is the realm name.\n"
@@ -554,10 +577,10 @@ static char Usage[] = "Usage: turnserver [options]\n"
 "						if pre-OpenSSL 1.0.2 is used. With OpenSSL 1.0.2+,\n"
 "						an optimal curve will be automatically calculated, if not defined\n"
 "						by this option.\n"
-" --dh566					Use 566 bits predefined DH TLS key. Default size of the predefined key is 1066.\n"
-" --dh2066					Use 2066 bits predefined DH TLS key. Default size of the predefined key is 1066.\n"
+" --dh566					Use 566 bits predefined DH TLS key. Default size of the predefined key is 2066.\n"
+" --dh1066					Use 1066 bits predefined DH TLS key. Default size of the predefined key is 2066.\n"
 " --dh-file	<dh-file-name>			Use custom DH TLS key, stored in PEM format in the file.\n"
-"						Flags --dh566 and --dh2066 are ignored when the DH key is taken from a file.\n"
+"						Flags --dh566 and --dh1066 are ignored when the DH key is taken from a file.\n"
 " --no-tlsv1					Do not allow TLSv1/DTLSv1 protocol.\n"
 " --no-tlsv1_1					Do not allow TLSv1.1 protocol.\n"
 " --no-tlsv1_2					Do not allow TLSv1.2/DTLSv1.2 protocol.\n"
@@ -582,6 +605,9 @@ static char Usage[] = "Usage: turnserver [options]\n"
 " --simple-log					This flag means that no log file rollover will be used, and the log file\n"
 "						name will be constructed as-is, without PID and date appendage.\n"
 "						This option can be used, for example, together with the logrotate tool.\n"
+" --new-log-timestamp				Enable full ISO-8601 timestamp in all logs.\n"
+" --new-log-timestamp-format    	<format>	Set timestamp format (in strftime(1) format)\n"
+" --log-binding					Log STUN binding request. It is now disabled by default to avoid DoS attacks.\n"
 " --stale-nonce[=<value>]			Use extra security with nonce value having limited lifetime (default 600 secs).\n"
 " --max-allocate-lifetime	<value>		Set the maximum value for the allocation lifetime. Default to 3600 secs.\n"
 " --channel-lifetime		<value>		Set the lifetime for channel binding, default to 600 secs.\n"
@@ -606,6 +632,8 @@ static char Usage[] = "Usage: turnserver [options]\n"
 " --pidfile <\"pid-file-name\">			File name to store the pid of the process.\n"
 "						Default is /var/run/turnserver.pid (if superuser account is used) or\n"
 "						/var/tmp/turnserver.pid .\n"
+" --acme-redirect <URL>				Redirect ACME, i.e. HTTP GET requests matching '^/.well-known/acme-challenge/(.*)' to '<URL>$1'.\n"
+"						Default is '', i.e. no special handling for such requests.\n"
 " --secure-stun					Require authentication of the STUN Binding request.\n"
 "						By default, the clients are allowed anonymous access to the STUN Binding functionality.\n"
 " --proc-user <user-name>			User name to run the turnserver process.\n"
@@ -641,10 +669,6 @@ static char Usage[] = "Usage: turnserver [options]\n"
 "						This value can be changed on-the-fly in CLI. The default value is 256.\n"
 " --ne=[1|2|3]					Set network engine type for the process (for internal purposes).\n"
 " -h						Help\n"
-"\n"
-" For more information, see the wiki pages:\n"
-"\n"
-"	https://github.com/coturn/coturn/wiki/\n"
 "\n";
 
 static char AdminUsage[] = "Usage: turnadmin [command] [options]\n"
@@ -660,7 +684,7 @@ static char AdminUsage[] = "Usage: turnadmin [command] [options]\n"
 	"	-D, --delete-admin		delete an admin user\n"
 	"	-l, --list			list all long-term mechanism users\n"
 	"	-L, --list-admin		list all admin users\n"
-	"	-s, --set-secret=<value>	Add shared secret for TURN RESP API\n"
+	"	-s, --set-secret=<value>	Add shared secret for TURN REST API\n"
 	"	-S, --show-secret		Show stored shared secrets for TURN REST API\n"
 	"	-X, --delete-secret=<value>	Delete a shared secret\n"
 	"	    --delete-all-secrets	Delete all shared secrets for REST API\n"
@@ -712,6 +736,7 @@ static char AdminUsage[] = "Usage: turnadmin [command] [options]\n"
 enum EXTRA_OPTS {
 	NO_UDP_OPT=256,
 	NO_TCP_OPT,
+	TCP_PROXY_PORT_OPT,
 	NO_TLS_OPT,
 	NO_DTLS_OPT,
 	NO_UDP_RELAY_OPT,
@@ -728,13 +753,19 @@ enum EXTRA_OPTS {
 	MAX_ALLOCATE_LIFETIME_OPT,
 	CHANNEL_LIFETIME_OPT,
 	PERMISSION_LIFETIME_OPT,
+	PROMETHEUS_OPT,
 	AUTH_SECRET_OPT,
+	NO_AUTH_PINGS_OPT,
+	NO_DYNAMIC_IP_LIST_OPT,
+	NO_DYNAMIC_REALMS_OPT,
 	DEL_ALL_AUTH_SECRETS_OPT,
 	STATIC_AUTH_SECRET_VAL_OPT,
 	AUTH_SECRET_TS_EXP, /* deprecated */
 	NO_STDOUT_LOG_OPT,
 	SYSLOG_OPT,
 	SIMPLE_LOG_OPT,
+	NEW_LOG_TIMESTAMP_OPT,
+	NEW_LOG_TIMESTAMP_FORMAT_OPT,
 	AUX_SERVER_OPT,
 	UDP_SELF_BALANCE_OPT,
 	ALTERNATE_SERVER_OPT,
@@ -765,7 +796,7 @@ enum EXTRA_OPTS {
 	CLI_MAX_SESSIONS_OPT,
 	EC_CURVE_NAME_OPT,
 	DH566_OPT,
-	DH2066_OPT,
+	DH1066_OPT,
 	NE_TYPE_OPT,
 	NO_SSLV2_OPT, /*deprecated*/
 	NO_SSLV3_OPT, /*deprecated*/
@@ -778,9 +809,11 @@ enum EXTRA_OPTS {
 	ADMIN_USER_QUOTA_OPT,
 	SERVER_NAME_OPT,
 	OAUTH_OPT,
-	PROD_OPT,
+	NO_SOFTWARE_ATTRIBUTE_OPT,
 	NO_HTTP_OPT,
-	SECRET_KEY_OPT
+	SECRET_KEY_OPT,
+	ACME_REDIRECT_OPT,
+	LOG_BINDING_OPT
 };
 
 struct myoption {
@@ -804,6 +837,7 @@ static const struct myoption long_options[] = {
 				{ "tls-listening-port", required_argument, NULL, TLS_PORT_OPT },
 				{ "alt-listening-port", required_argument, NULL, ALT_PORT_OPT },
 				{ "alt-tls-listening-port", required_argument, NULL, ALT_TLS_PORT_OPT },
+				{ "tcp-proxy-port", required_argument, NULL, TCP_PROXY_PORT_OPT },
 				{ "listening-ip", required_argument, NULL, 'L' },
 				{ "relay-device", required_argument, NULL, 'i' },
 				{ "relay-ip", required_argument, NULL, 'E' },
@@ -830,8 +864,14 @@ static const struct myoption long_options[] = {
 				{ "redis-userdb", required_argument, NULL, 'N' },
 				{ "redis-statsdb", required_argument, NULL, 'O' },
 #endif
+#if !defined(TURN_NO_PROMETHEUS)
+				{ "prometheus", optional_argument, NULL, PROMETHEUS_OPT },
+#endif
 				{ "use-auth-secret", optional_argument, NULL, AUTH_SECRET_OPT },
 				{ "static-auth-secret", required_argument, NULL, STATIC_AUTH_SECRET_VAL_OPT },
+				{ "no-auth-pings", optional_argument, NULL, NO_AUTH_PINGS_OPT },
+				{ "no-dynamic-ip-list", optional_argument, NULL, NO_DYNAMIC_IP_LIST_OPT },
+				{ "no-dynamic-realms", optional_argument, NULL, NO_DYNAMIC_REALMS_OPT },
 /* deprecated: */		{ "secret-ts-exp-time", optional_argument, NULL, AUTH_SECRET_TS_EXP },
 				{ "realm", required_argument, NULL, 'r' },
 				{ "server-name", required_argument, NULL, SERVER_NAME_OPT },
@@ -843,7 +883,8 @@ static const struct myoption long_options[] = {
 				{ "verbose", optional_argument, NULL, 'v' },
 				{ "Verbose", optional_argument, NULL, 'V' },
 				{ "daemon", optional_argument, NULL, 'o' },
-				{ "prod", optional_argument, NULL, PROD_OPT },
+/* deprecated: */		{ "prod", optional_argument, NULL, NO_SOFTWARE_ATTRIBUTE_OPT },
+				{ "no-software-attribute", optional_argument, NULL, NO_SOFTWARE_ATTRIBUTE_OPT },
 				{ "fingerprint", optional_argument, NULL, 'f' },
 				{ "check-origin-consistency", optional_argument, NULL, CHECK_ORIGIN_CONSISTENCY_OPT },
 				{ "no-udp", optional_argument, NULL, NO_UDP_OPT },
@@ -865,6 +906,8 @@ static const struct myoption long_options[] = {
 				{ "no-stdout-log", optional_argument, NULL, NO_STDOUT_LOG_OPT },
 				{ "syslog", optional_argument, NULL, SYSLOG_OPT },
 				{ "simple-log", optional_argument, NULL, SIMPLE_LOG_OPT },
+				{ "new-log-timestamp", optional_argument, NULL, NEW_LOG_TIMESTAMP_OPT },
+				{ "new-log-timestamp-format", required_argument, NULL, NEW_LOG_TIMESTAMP_FORMAT_OPT },
 				{ "aux-server", required_argument, NULL, AUX_SERVER_OPT },
 				{ "udp-self-balance", optional_argument, NULL, UDP_SELF_BALANCE_OPT },
 				{ "alternate-server", required_argument, NULL, ALTERNATE_SERVER_OPT },
@@ -895,7 +938,7 @@ static const struct myoption long_options[] = {
 				{ "cli-max-output-sessions", required_argument, NULL, CLI_MAX_SESSIONS_OPT },
 				{ "ec-curve-name", required_argument, NULL, EC_CURVE_NAME_OPT },
 				{ "dh566", optional_argument, NULL, DH566_OPT },
-				{ "dh2066", optional_argument, NULL, DH2066_OPT },
+				{ "dh1066", optional_argument, NULL, DH1066_OPT },
 				{ "ne", required_argument, NULL, NE_TYPE_OPT },
 				{ "no-sslv2", optional_argument, NULL, NO_SSLV2_OPT }, /* deprecated */
 				{ "no-sslv3", optional_argument, NULL, NO_SSLV3_OPT }, /* deprecated */
@@ -904,6 +947,9 @@ static const struct myoption long_options[] = {
 				{ "no-tlsv1_2", optional_argument, NULL, NO_TLSV1_2_OPT },
 				{ "secret-key-file", required_argument, NULL, SECRET_KEY_OPT },
 				{ "keep-address-family", optional_argument, NULL, 'K' },
+				{ "acme-redirect", required_argument, NULL, ACME_REDIRECT_OPT },
+				{ "log-binding", optional_argument, NULL, LOG_BINDING_OPT },
+
 				{ NULL, no_argument, NULL, 0 }
 };
 
@@ -1127,7 +1173,7 @@ static void set_option(int c, char *value)
 	  STRCPY(turn_params.oauth_server_name,value);
 	  break;
   case OAUTH_OPT:
-	  if(!ENC_ALG_NUM) {
+	  if( ENC_ALG_NUM == 0) {
 		  TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "WARNING: option --oauth is not supported; ignored.\n");
 	  } else {
 		  turn_params.oauth = get_bool_value(value);
@@ -1161,9 +1207,9 @@ static void set_option(int c, char *value)
 	  if(get_bool_value(value))
 		  turn_params.dh_key_size = DH_566;
 	  break;
-  case DH2066_OPT:
+  case DH1066_OPT:
 	  if(get_bool_value(value))
-		  turn_params.dh_key_size = DH_2066;
+		  turn_params.dh_key_size = DH_1066;
 	  break;
   case EC_CURVE_NAME_OPT:
 	  STRCPY(turn_params.ec_curve_name,value);
@@ -1181,7 +1227,7 @@ static void set_option(int c, char *value)
 	  use_cli = !get_bool_value(value);
 	  break;
   case CLI_IP_OPT:
-	  if(make_ioa_addr((const u08bits*)value,0,&cli_addr)<0) {
+	  if(make_ioa_addr((const uint8_t*)value,0,&cli_addr)<0) {
 		  TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR,"Cannot set cli address: %s\n",value);
 	  } else{
 		  cli_addr_set = 1;
@@ -1197,7 +1243,7 @@ static void set_option(int c, char *value)
 	  use_web_admin = get_bool_value(value);
 	  break;
   case WEB_ADMIN_IP_OPT:
-	  if(make_ioa_addr((const u08bits*)value, 0, &web_admin_addr) < 0) {
+	  if(make_ioa_addr((const uint8_t*)value, 0, &web_admin_addr) < 0) {
 		  TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Cannot set web-admin address: %s\n", value);
 	  } else {
 		  web_admin_addr_set = 1;
@@ -1265,6 +1311,10 @@ static void set_option(int c, char *value)
 	case ALT_TLS_PORT_OPT:
 		turn_params.alt_tls_listener_port = atoi(value);
 		break;
+	case TCP_PROXY_PORT_OPT:
+		turn_params.tcp_proxy_port = atoi(value);
+		turn_params.tcp_use_proxy = 1;
+		break;
 	case MIN_PORT_OPT:
 		turn_params.min_port = atoi(value);
 		break;
@@ -1312,29 +1362,31 @@ static void set_option(int c, char *value)
 		if(value) {
 			char *div = strchr(value,'/');
 			if(div) {
-				char *nval=turn_strdup(value);
+				char *nval=strdup(value);
 				div = strchr(nval,'/');
 				div[0]=0;
 				++div;
 				ioa_addr apub,apriv;
-				if(make_ioa_addr((const u08bits*)nval,0,&apub)<0) {
+				if(make_ioa_addr((const uint8_t*)nval,0,&apub)<0) {
 					TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR,"-X : Wrong address format: %s\n",nval);
 				} else {
-					if(make_ioa_addr((const u08bits*)div,0,&apriv)<0) {
+					if(make_ioa_addr((const uint8_t*)div,0,&apriv)<0) {
 						TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR,"-X : Wrong address format: %s\n",div);
 					} else {
 						ioa_addr_add_mapping(&apub,&apriv);
+						if (add_ip_list_range((const char *)div, NULL, &turn_params.ip_whitelist) == 0)
+							TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "Whitelisting external-ip private part: %s\n", div);
 					}
 				}
-				turn_free(nval,strlen(nval)+1);
+				free(nval);
 			} else {
 				if(turn_params.external_ip) {
 					TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "You cannot define external IP more than once in the configuration\n");
 				} else {
 					turn_params.external_ip = (ioa_addr*)allocate_super_memory_engine(turn_params.listener.ioa_eng, sizeof(ioa_addr));
-					if(make_ioa_addr((const u08bits*)value,0,turn_params.external_ip)<0) {
+					if(make_ioa_addr((const uint8_t*)value,0,turn_params.external_ip)<0) {
 						TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR,"-X : Wrong address format: %s\n",value);
-						turn_free(turn_params.external_ip,sizeof(ioa_addr));
+						free(turn_params.external_ip);
 						turn_params.external_ip = NULL;
 					}
 				}
@@ -1377,8 +1429,8 @@ static void set_option(int c, char *value)
 			anon_credentials = 1;
 		}
 		break;
-	case PROD_OPT:
-		turn_params.prod = get_bool_value(value);
+	case NO_SOFTWARE_ATTRIBUTE_OPT:
+		turn_params.no_software_attribute = get_bool_value(value);
 		break;
 	case 'f':
 		turn_params.fingerprint = get_bool_value(value);
@@ -1422,11 +1474,25 @@ static void set_option(int c, char *value)
 		turn_params.use_redis_statsdb = 1;
 		break;
 #endif
+#if !defined(TURN_NO_PROMETHEUS)
+	case PROMETHEUS_OPT:
+		turn_params.prometheus = 1;
+		break;
+#endif
 	case AUTH_SECRET_OPT:
 		turn_params.use_auth_secret_with_timestamp = 1;
         use_tltc = 1;
 		turn_params.ct = TURN_CREDENTIALS_LONG_TERM;
 		use_lt_credentials = 1;
+		break;
+	case NO_AUTH_PINGS_OPT:
+		turn_params.no_auth_pings = 1;
+		break;
+	case NO_DYNAMIC_IP_LIST_OPT:
+		turn_params.no_dynamic_ip_list = 1;
+		break;
+	case NO_DYNAMIC_REALMS_OPT:
+		turn_params.no_dynamic_realms = 1;
 		break;
 	case STATIC_AUTH_SECRET_VAL_OPT:
 		add_to_secrets_list(&turn_params.default_users_db.ram_db.static_auth_secrets,value);
@@ -1529,16 +1595,25 @@ static void set_option(int c, char *value)
 	case PIDFILE_OPT:
 		STRCPY(turn_params.pidfile,value);
 		break;
+	case ACME_REDIRECT_OPT:
+		STRCPY(turn_params.acme_redirect,value);
+		break;
 	case 'C':
 		if(value && *value) {
 			turn_params.rest_api_separator=*value;
 		}
 		break;
+	case LOG_BINDING_OPT:
+		turn_params.log_binding = get_bool_value(value);
+		break;
+
 	/* these options have been already taken care of before: */
 	case 'l':
 	case NO_STDOUT_LOG_OPT:
 	case SYSLOG_OPT:
 	case SIMPLE_LOG_OPT:
+	case NEW_LOG_TIMESTAMP_OPT:
+	case NEW_LOG_TIMESTAMP_FORMAT_OPT:
 	case 'c':
 	case 'n':
 	case 'h':
@@ -1601,25 +1676,25 @@ static void read_config_file(int argc, char **argv, int pass)
 
 	if(pass == 0) {
 
-	  if (argv) {
-	    int i = 0;
-	    for (i = 0; i < argc; i++) {
-	      if (!strcmp(argv[i], "-c")) {
-		if (i < argc - 1) {
-		  STRCPY(config_file, argv[i + 1]);
-		} else {
-		  TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "Wrong usage of -c option\n");
+		if (argv) {
+			int i = 0;
+			for (i = 0; i < argc; i++) {
+				if (!strcmp(argv[i], "-c")) {
+					if (i < argc - 1) {
+						STRCPY(config_file, argv[i + 1]);
+					} else {
+						TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "Wrong usage of -c option\n");
+					}
+				} else if (!strcmp(argv[i], "-n")) {
+					turn_params.do_not_use_config_file = 1;
+					config_file[0]=0;
+					return;
+				} else if (!strcmp(argv[i], "-h")) {
+					printf("\n%s\n",Usage);
+					exit(0);
+				}
+			}
 		}
-	      } else if (!strcmp(argv[i], "-n")) {
-		turn_params.do_not_use_config_file = 1;
-		config_file[0]=0;
-		return;
-	      } else if (!strcmp(argv[i], "-h")) {
-		printf("\n%s\n",Usage);
-		exit(0);
-	      }
-	    }
-	  }
 	}
 
 	if (!turn_params.do_not_use_config_file && config_file[0]) {
@@ -1646,7 +1721,9 @@ static void read_config_file(int argc, char **argv, int pass)
 				if (!s[0])
 					continue;
 				size_t slen = strlen(s);
-				while (slen && ((s[slen - 1] == 10) || (s[slen - 1] == 13)))
+
+				// strip white-spaces from config file lines end
+				while (slen && isspace(s[slen - 1]))
 					s[--slen] = 0;
 				if (slen) {
 					int c = 0;
@@ -1654,7 +1731,7 @@ static void read_config_file(int argc, char **argv, int pass)
 					STRCPY(sarg, s);
 					if (parse_arg_string(sarg, &c, &value) < 0) {
 						TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "Bad configuration format: %s\n",
-							sarg);
+								sarg);
 					} else if((pass == 0) && (c == 'l')) {
 						set_logfile(value);
 					} else if((pass==0) && (c==NO_STDOUT_LOG_OPT)) {
@@ -1663,10 +1740,14 @@ static void read_config_file(int argc, char **argv, int pass)
 						set_log_to_syslog(get_bool_value(value));
 					} else if((pass==0) && (c==SIMPLE_LOG_OPT)) {
 						set_simple_log(get_bool_value(value));
-					} else if((pass == 0) && (c != 'u')) {
-					  set_option(c, value);
-					} else if((pass > 0) && (c == 'u')) {
-					  set_option(c, value);
+					} else if ((pass==0) && (c==NEW_LOG_TIMESTAMP_OPT)) {
+						use_new_log_timestamp_format=1;
+					} else if ((pass==0) && (c==NEW_LOG_TIMESTAMP_FORMAT_OPT)) {
+						set_turn_log_timestamp_format(value);
+					} else if((pass == 1) && (c != 'u')) {
+						set_option(c, value);
+					} else if((pass == 2) && (c == 'u')) {
+						set_option(c, value);
 					}
 					if (s[slen - 1] == 59) {
 						TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "Check config! The following line ends with semicolon: \"%s\" \n",s);
@@ -1679,18 +1760,28 @@ static void read_config_file(int argc, char **argv, int pass)
 
 		} else
 			TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "WARNING: Cannot find config file: %s. Default and command-line settings will be used.\n",
-				config_file);
+					config_file);
 
 		if (full_path_to_config_file) {
-			turn_free(full_path_to_config_file, strlen(full_path_to_config_file)+1);
+			free(full_path_to_config_file);
 			full_path_to_config_file = NULL;
 		}
 	}
 }
 
+static int disconnect_database(void)
+{
+	const turn_dbdriver_t * dbd = get_dbdriver();
+	if (dbd && dbd->disconnect) {
+		dbd->disconnect();
+	}
+	return 0;
+}
+
 static int adminmain(int argc, char **argv)
 {
 	int c = 0;
+	int rc = 0;
 
 	TURNADMIN_COMMAND_TYPE ct = TA_COMMAND_UNKNOWN;
 
@@ -1698,11 +1789,11 @@ static int adminmain(int argc, char **argv)
 	FILE* fptr;
 	unsigned char generated_key[16]; //changed
 
-	u08bits user[STUN_MAX_USERNAME_SIZE+1]="\0";
-	u08bits realm[STUN_MAX_REALM_SIZE+1]="\0";
-	u08bits pwd[STUN_MAX_PWD_SIZE+1]="\0";
-	u08bits secret[AUTH_SECRET_SIZE+1]="\0";
-	u08bits origin[STUN_MAX_ORIGIN_SIZE+1]="\0";
+	uint8_t user[STUN_MAX_USERNAME_SIZE+1]="\0";
+	uint8_t realm[STUN_MAX_REALM_SIZE+1]="\0";
+	uint8_t pwd[STUN_MAX_PWD_SIZE+1]="\0";
+	uint8_t secret[AUTH_SECRET_SIZE+1]="\0";
+	uint8_t origin[STUN_MAX_ORIGIN_SIZE+1]="\0";
 	perf_options_t po = {(band_limit_t)-1,-1,-1};
 
 	struct uoptions uo;
@@ -1713,177 +1804,183 @@ static int adminmain(int argc, char **argv)
 
 	while (((c = getopt_long(argc, argv, ADMIN_OPTIONS, uo.u.o, NULL)) != -1)) {
 		switch (c){
-        case 'P':
-            if(pwd[0]) {
-                char result[257];
-                generate_new_enc_password((char*)pwd, result);
-                printf("%s\n",result);
-                exit(0);
-            }
-            print_enc_password = 1;
-            break;
-        case 'E':
-            print_enc_aes_password = 1;
-            break;
-        case 'g':
-            ct = TA_SET_REALM_OPTION;
-            break;
-        case 'G':
-            ct = TA_LIST_REALM_OPTIONS;
-            break;
-        case ADMIN_USER_QUOTA_OPT:
-            po.user_quota = (vint)atoi(optarg);
-            break;
-        case ADMIN_TOTAL_QUOTA_OPT:
-            po.total_quota = (vint)atoi(optarg);
-            break;
-        case ADMIN_MAX_BPS_OPT:
-            po.max_bps = (vint)atoi(optarg);
-            break;
-        case 'O':
-            ct = TA_ADD_ORIGIN;
-            break;
-        case 'R':
-            ct = TA_DEL_ORIGIN;
-            break;
-        case 'I':
-            ct = TA_LIST_ORIGINS;
-            break;
-        case 'o':
-            STRCPY(origin,optarg);
-            break;
-        case 'k':
-            ct = TA_PRINT_KEY;
-            break;
-        case 'a':
-            ct = TA_UPDATE_USER;
-            break;
-        case 'd':
-            ct = TA_DELETE_USER;
-            break;
-        case 'A':
-            ct = TA_UPDATE_USER;
-            is_admin = 1;
-            break;
-        case 'D':
-            ct = TA_DELETE_USER;
-            is_admin = 1;
-            break;
-        case 'l':
-            ct = TA_LIST_USERS;
-            break;
-        case 'L':
-            ct = TA_LIST_USERS;
-            is_admin = 1;
-            break;
-        case 's':
-            ct = TA_SET_SECRET;
-            STRCPY(secret,optarg);
-            break;
-        case 'S':
-            ct = TA_SHOW_SECRET;
-            break;
-        case 'X':
-            ct = TA_DEL_SECRET;
-            if(optarg)
-                STRCPY(secret,optarg);
-            break;
-        case DEL_ALL_AUTH_SECRETS_OPT:
-            ct = TA_DEL_SECRET;
-            break;
+			case 'P':
+				if(pwd[0]) {
+					char result[257];
+					generate_new_enc_password((char*)pwd, result);
+					printf("%s\n",result);
+					exit(0);
+				}
+				print_enc_password = 1;
+				break;
+			case 'E':
+				print_enc_aes_password = 1;
+				break;
+			case 'g':
+				ct = TA_SET_REALM_OPTION;
+				break;
+			case 'G':
+				ct = TA_LIST_REALM_OPTIONS;
+				break;
+			case ADMIN_USER_QUOTA_OPT:
+				po.user_quota = (vint)atoi(optarg);
+				break;
+			case ADMIN_TOTAL_QUOTA_OPT:
+				po.total_quota = (vint)atoi(optarg);
+				break;
+			case ADMIN_MAX_BPS_OPT:
+				po.max_bps = (vint)atoi(optarg);
+				break;
+			case 'O':
+				ct = TA_ADD_ORIGIN;
+				break;
+			case 'R':
+				ct = TA_DEL_ORIGIN;
+				break;
+			case 'I':
+				ct = TA_LIST_ORIGINS;
+				break;
+			case 'o':
+				STRCPY(origin,optarg);
+				break;
+			case 'k':
+				ct = TA_PRINT_KEY;
+				break;
+			case 'a':
+				ct = TA_UPDATE_USER;
+				break;
+			case 'd':
+				ct = TA_DELETE_USER;
+				break;
+			case 'A':
+				ct = TA_UPDATE_USER;
+				is_admin = 1;
+				break;
+			case 'D':
+				ct = TA_DELETE_USER;
+				is_admin = 1;
+				break;
+			case 'l':
+				ct = TA_LIST_USERS;
+				break;
+			case 'L':
+				ct = TA_LIST_USERS;
+				is_admin = 1;
+				break;
+			case 's':
+				ct = TA_SET_SECRET;
+				STRCPY(secret,optarg);
+				break;
+			case 'S':
+				ct = TA_SHOW_SECRET;
+				break;
+			case 'X':
+				ct = TA_DEL_SECRET;
+				if(optarg)
+					STRCPY(secret,optarg);
+				break;
+			case DEL_ALL_AUTH_SECRETS_OPT:
+				ct = TA_DEL_SECRET;
+				break;
 #if !defined(TURN_NO_SQLITE)
-		case 'b':
-		  STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
-		  turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_SQLITE;
-		  break;
+			case 'b':
+				STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
+				turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_SQLITE;
+				break;
 #endif
 #if !defined(TURN_NO_PQ)
-		case 'e':
-		  STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
-		  turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_PQ;
-		  break;
+			case 'e':
+				STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
+				turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_PQ;
+				break;
 #endif
 #if !defined(TURN_NO_MYSQL)
-		case 'M':
-		  STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
-		  turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_MYSQL;
-		  break;
+			case 'M':
+				STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
+				turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_MYSQL;
+				break;
 #endif
 #if !defined(TURN_NO_MONGO)
-		case 'J':
-		  STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
-		  turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_MONGO;
-		  break;
+			case 'J':
+				STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
+				turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_MONGO;
+				break;
 #endif
 #if !defined(TURN_NO_HIREDIS)
-		case 'N':
-		  STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
-		  turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_REDIS;
-		  break;
+			case 'N':
+				STRCPY(turn_params.default_users_db.persistent_users_db.userdb,optarg);
+				turn_params.default_users_db.userdb_type = TURN_USERDB_TYPE_REDIS;
+				break;
 #endif
-        case 'u':
-            STRCPY(user,optarg);
-            if(!is_secure_string((u08bits*)user,1)) {
-                TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Wrong user name structure or symbols, choose another name: %s\n",user);
-                exit(-1);
-            }
-            if(SASLprep((u08bits*)user)<0) {
-                TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Wrong user name: %s\n",user);
-                exit(-1);
-            }
-            break;
-        case 'r':
-            set_default_realm_name(optarg);
-            STRCPY(realm,optarg);
-            if(SASLprep((u08bits*)realm)<0) {
-                TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Wrong realm: %s\n",realm);
-                exit(-1);
-            }
-            break;
-        case 'p':
-            STRCPY(pwd,optarg);
-            if(SASLprep((u08bits*)pwd)<0) {
-                TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Wrong password: %s\n",pwd);
-                exit(-1);
-            }
-            if(print_enc_password) {
-                char result[257];
-                generate_new_enc_password((char*)pwd, result);
-                printf("%s\n",result);
-                exit(0);
-            }
-            if(print_enc_aes_password){
-				encrypt_aes_128(pwd, generated_key);
-                exit(0);
-            }
-            break;
-        case 'x':
-            generate_aes_128_key(optarg, generated_key);
-            exit(0);
-            break;
-        case 'f':
-            fptr = fopen((char*)optarg, "r");
-            if(fptr == NULL){
-                printf("No such file like %s\n", (char*)optarg);
-            }
-            else{
-				fseek (fptr, 0, SEEK_SET);
-				if( fread(generated_key, sizeof(char), 16, fptr) !=0 ){
-					TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "%s: ERROR: Secret-Key file is empty\n",__FUNCTION__);
+			case 'u':
+				STRCPY(user,optarg);
+				if(!is_secure_string((uint8_t*)user,1)) {
+					TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Wrong user name structure or symbols, choose another name: %s\n",user);
+					exit(-1);
 				}
-				fclose (fptr);
-            }
-            break;
-        case 'v':
-			decrypt_aes_128((char*)optarg, generated_key);
-            exit(0);
-        case 'h':
-            printf("\n%s\n", AdminUsage);
-            exit(0);
-            break;
-        default:
-            fprintf(stderr,"\n%s\n", AdminUsage);
-            exit(-1);
+				if(SASLprep((uint8_t*)user)<0) {
+					TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Wrong user name: %s\n",user);
+					exit(-1);
+				}
+				break;
+			case 'r':
+				set_default_realm_name(optarg);
+				STRCPY(realm,optarg);
+				if(SASLprep((uint8_t*)realm)<0) {
+					TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Wrong realm: %s\n",realm);
+					exit(-1);
+				}
+				break;
+			case 'p':
+				STRCPY(pwd,optarg);
+				if(SASLprep((uint8_t*)pwd)<0) {
+					TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Wrong password: %s\n",pwd);
+					exit(-1);
+				}
+				if(print_enc_password) {
+					char result[257];
+					generate_new_enc_password((char*)pwd, result);
+					printf("%s\n",result);
+					exit(0);
+				}
+				if(print_enc_aes_password){
+					encrypt_aes_128(pwd, generated_key);
+					exit(0);
+				}
+				break;
+			case 'x':
+				generate_aes_128_key(optarg, generated_key);
+				exit(0);
+				break;
+			case 'f':
+				fptr = fopen((char*)optarg, "r");
+				if(fptr == NULL){
+					printf("No such file like %s\n", (char*)optarg);
+				}
+				else{
+					fseek (fptr, 0, SEEK_SET);
+					rc = fread(generated_key, sizeof(char), 16, fptr);
+					if( rc == 0 ){
+						TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "%s: ERROR: Secret-Key file is empty\n",__FUNCTION__);
+					}
+					else{
+						if( rc != 16 ){
+							TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "%s: ERROR: Secret-Key length is not enough\n",__FUNCTION__);
+						}
+					}
+					fclose (fptr);
+				}
+				break;
+			case 'v':
+				decrypt_aes_128((char*)optarg, generated_key);
+				exit(0);
+			case 'h':
+				printf("\n%s\n", AdminUsage);
+				exit(0);
+				break;
+			default:
+				fprintf(stderr,"\n%s\n", AdminUsage);
+				exit(-1);
 		}
 	}
 
@@ -1905,7 +2002,11 @@ static int adminmain(int argc, char **argv)
 		exit(-1);
 	}
 
-	return adminuser(user, realm, pwd, secret, origin, ct, &po, is_admin);
+	int result = adminuser(user, realm, pwd, secret, origin, ct, &po, is_admin);
+
+	disconnect_database();
+
+	return result;
 }
 
 static void print_features(unsigned long mfn)
@@ -1923,16 +2024,16 @@ static void print_features(unsigned long mfn)
 
 	TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "\n\n==== Show him the instruments, Practical Frost: ====\n\n");
 
-/*
-	Frost stepped forward and opened the polished case with a theatrical
-	flourish. It was a masterful piece of craftsmanship. As the lid was
-	pulled back, the many trays inside lifted and fanned out, displaying
-	Glokta’s tools in all their gruesome glory. There were blades of every
-	size and shape, needles curved and straight, bottles of oil and acid,
-	nails and screws, clamps and pliers, saws, hammers, chisels. Metal, wood
-	and glass glittered in the bright lamplight, all polished to mirror
-	brightness and honed to a murderous sharpness.
-*/
+	/*
+	   Frost stepped forward and opened the polished case with a theatrical
+	   flourish. It was a masterful piece of craftsmanship. As the lid was
+	   pulled back, the many trays inside lifted and fanned out, displaying
+	   Glokta’s tools in all their gruesome glory. There were blades of every
+	   size and shape, needles curved and straight, bottles of oil and acid,
+	   nails and screws, clamps and pliers, saws, hammers, chisels. Metal, wood
+	   and glass glittered in the bright lamplight, all polished to mirror
+	   brightness and honed to a murderous sharpness.
+	   */
 
 #if !TLS_SUPPORTED
 	TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "TLS is not supported\n");
@@ -1957,7 +2058,7 @@ static void print_features(unsigned long mfn)
 	TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "TURN/STUN ALPN is not supported\n");
 #endif
 
-	if(!ENC_ALG_NUM) {
+	if(ENC_ALG_NUM == 0) {
 		TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "Third-party authorization (oAuth) is not supported\n");
 	} else {
 		TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "Third-party authorization (oAuth) supported\n");
@@ -2038,6 +2139,7 @@ static void set_network_engine(void)
 
 static void drop_privileges(void)
 {
+	setgroups(0, NULL);
 	if(procgroupid_set) {
 		if(getgid() != procgroupid) {
 			if (setgid(procgroupid) != 0) {
@@ -2122,6 +2224,12 @@ int main(int argc, char **argv)
 			case SIMPLE_LOG_OPT:
 				set_simple_log(get_bool_value(optarg));
 				break;
+			case NEW_LOG_TIMESTAMP_OPT:
+				use_new_log_timestamp_format=1;
+				break;
+			case NEW_LOG_TIMESTAMP_FORMAT_OPT:
+				set_turn_log_timestamp_format(optarg);
+				break;
 			default:
 				;
 			}
@@ -2153,13 +2261,15 @@ int main(int argc, char **argv)
 
 #endif
 
-	ns_bzero(&turn_params.default_users_db,sizeof(default_users_db_t));
-	turn_params.default_users_db.ram_db.static_accounts = ur_string_map_create(turn_free_simple);
+	bzero(&turn_params.default_users_db,sizeof(default_users_db_t));
+	turn_params.default_users_db.ram_db.static_accounts = ur_string_map_create(free);
 
 	if(strstr(argv[0],"turnadmin"))
 		return adminmain(argc,argv);
-
+	// Zero pass apply the log options.
 	read_config_file(argc,argv,0);
+	// First pass read other config options
+	read_config_file(argc,argv,1);
 
 	struct uoptions uo;
 	uo.u.m = long_options;
@@ -2169,7 +2279,8 @@ int main(int argc, char **argv)
 			set_option(c,optarg);
 	}
 
-	read_config_file(argc,argv,1);
+	// Second pass read -u options
+	read_config_file(argc,argv,2);
 
 	{
 		unsigned long mfn = set_system_parameters(1);
@@ -2184,6 +2295,9 @@ int main(int argc, char **argv)
 	TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "Domain name: %s\n",turn_params.domain);
 	TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "Default realm: %s\n",get_realm(NULL)->options.name);
 
+	if(turn_params.acme_redirect[0]) {
+		TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "ACME redirect URL: %s\n",turn_params.acme_redirect);
+	}
 	if(turn_params.oauth && turn_params.oauth_server_name[0]) {
 		TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "oAuth server name: %s\n",turn_params.oauth_server_name);
 	}
@@ -2237,19 +2351,19 @@ int main(int argc, char **argv)
 
 	if(use_ltc && use_tltc) {
 		TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "\nCONFIGURATION ALERT: You specified --lt-cred-mech and --use-auth-secret in the same time.\n"
-                       "Be aware that you could not mix the username/password and the shared secret based auth methohds. \n"
+                       "Be aware that you could not mix the username/password and the shared secret based auth methods. \n"
                        "Shared secret overrides username/password based auth method. Check your configuration!\n");
 	}
 
 	if(turn_params.allow_loopback_peers) {
 		TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "CONFIG WARNING: allow_loopback_peers opens a possible security vulnerability. Do not use in production!!\n");
-		if(cli_password[0]==0) {
+		if(cli_password[0]==0 && use_cli) {
 			TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "\nCONFIG ERROR: allow_loopback_peers and empty cli password cannot be used together.\n");
 			exit(-1);
 		}
         }
 
-	if(cli_password[0]==0) {
+	if(use_cli && cli_password[0]==0 && use_cli) {
 		TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "\nCONFIG ERROR: Empty cli-password, and so telnet cli interface is disabled! Please set a non empty cli-password!\n");
 		use_cli = 0;
 	}
@@ -2336,7 +2450,7 @@ int main(int argc, char **argv)
 				const char* sra = (const char*)turn_params.relay_addrs[ir];
 				if((strstr(sra,"127.0.0.1") != sra)&&(strstr(sra,"::1")!=sra)) {
 					ioa_addr ra;
-					if(make_ioa_addr((const u08bits*)sra,0,&ra)<0) {
+					if(make_ioa_addr((const uint8_t*)sra,0,&ra)<0) {
 						TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR,"-X : Wrong address format: %s\n",sra);
 					} else if(ra.ss.sa_family == turn_params.external_ip->ss.sa_family) {
 						ioa_addr_add_mapping(turn_params.external_ip,&ra);
@@ -2409,8 +2523,19 @@ int main(int argc, char **argv)
 	event_add(ev, NULL);
 
 	drop_privileges();
+#if !defined(TURN_NO_PROMETHEUS)
+	if (start_prometheus_server()){
+	  TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "\nCould not start Prometheus collector!\n");
+	}
+	else {
+	  TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "\nPrometheus collector started sucessfully.\n");
+	}
+#endif
+
 
 	run_listener_server(&(turn_params.listener));
+
+	disconnect_database();
 
 	return 0;
 }
@@ -2468,7 +2593,7 @@ static int THREAD_setup(void) {
 
 	mutex_buf_initialized = 1;
 
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L
+#if OPENSSL_VERSION_NUMBER >= 0x10000000L && OPENSSL_VERSION_NUMBER <= OPENSSL_VERSION_1_1_1
 	CRYPTO_THREADID_set_callback(coturn_id_function);
 #else
 	CRYPTO_set_id_callback(coturn_id_function);
@@ -2490,7 +2615,7 @@ int THREAD_cleanup(void) {
   if (!mutex_buf_initialized)
     return 0;
 
-#if OPENSSL_VERSION_NUMBER >= 0x10000000L
+#if OPENSSL_VERSION_NUMBER >= 0x10000000L && OPENSSL_VERSION_NUMBER <= OPENSSL_VERSION_1_1_1
 	CRYPTO_THREADID_set_callback(NULL);
 #else
 	CRYPTO_set_id_callback(NULL);
@@ -2537,7 +2662,7 @@ static void adjust_key_file_name(char *fn, const char* file_title, int critical)
 	  fn[sizeof(turn_params.cert_file)-1]=0;
 
 	  if(full_path_to_file)
-	    turn_free(full_path_to_file,strlen(full_path_to_file)+1);
+	    free(full_path_to_file);
 	  return;
 	}
 
@@ -2549,7 +2674,7 @@ static void adjust_key_file_name(char *fn, const char* file_title, int critical)
 			  TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING,"WARNING: cannot start TLS and DTLS listeners because %s file is not set properly\n",file_title);
 		}
 		if(full_path_to_file)
-			turn_free(full_path_to_file,strlen(full_path_to_file)+1);
+			free(full_path_to_file);
 		return;
 	}
 }
@@ -2749,6 +2874,7 @@ static void set_ctx(SSL_CTX** out, const char *protocol, const SSL_METHOD* metho
 {
 	SSL_CTX* ctx = SSL_CTX_new(method);
 	int err = 0;
+	int rc = 0;
 #if ALPN_SUPPORTED
 	SSL_CTX_set_alpn_select_cb(ctx, ServerALPNCallback, NULL);
 #endif
@@ -2873,10 +2999,10 @@ static void set_ctx(SSL_CTX** out, const char *protocol, const SSL_METHOD* metho
 		if(!dh) {
 			if(turn_params.dh_key_size == DH_566)
 				dh = get_dh566();
-			else if(turn_params.dh_key_size == DH_2066)
-				dh = get_dh2066();
-			else
+			else if(turn_params.dh_key_size == DH_1066)
 				dh = get_dh1066();
+			else
+				dh = get_dh2066();
 		}
 
 		/*
@@ -2908,8 +3034,14 @@ static void set_ctx(SSL_CTX** out, const char *protocol, const SSL_METHOD* metho
 				perror("Cannot open Secret-Key file");
 			} else {
 				fseek (f, 0, SEEK_SET);
-				if ( fread(turn_params.secret_key, sizeof(char), 16, f) != 0 ){
+				rc = fread(turn_params.secret_key, sizeof(char), 16, f);
+				if( rc == 0 ){
 					TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "%s: ERROR: Secret-Key file is empty\n",__FUNCTION__);
+				}
+				else{
+					if( rc != 16 ){
+						TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "%s: ERROR: Secret-Key length is not enough\n",__FUNCTION__);
+					}
 				}
 				fclose (f);
 			}
