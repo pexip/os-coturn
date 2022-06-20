@@ -6,8 +6,8 @@ XSBC-Pexip-Original-Maintainer: Debian VoIP Team <pkg-voip-maintainers@alioth-li
 XSBC-Pexip-Original-Uploaders: Oleg Moskalenko <mom040267@gmail.com>,
            Mészáros Mihály <misi@majd.eu>
 Build-Depends: debhelper-compat (= 13),
-               default-libmysqlclient-dev,
-               default-mysql-client,
+#               default-libmysqlclient-dev,
+#               default-mysql-client,
                dpkg-dev (>= 1.16.1~),
                libsystemd-dev [linux-any],
                pkg-config,
