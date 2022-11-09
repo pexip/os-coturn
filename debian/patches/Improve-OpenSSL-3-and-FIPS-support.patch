@@ -1,0 +1,103 @@
+From 4ce784a8781ab086c150e2b9f5641b1a37fd9b31 Mon Sep 17 00:00:00 2001
+From: Pavel Punsky <eakraly@users.noreply.github.com>
+Date: Fri, 16 Sep 2022 00:46:45 -0700
+Subject: [PATCH] Improve openssl3 and FIPS support (#955)
+
+openssl-3.0 deprecated some APIs and introduced new APIs instead:
+
+`SSL_get_peer_certificate ` -> `SSL_get1_peer_certificate `
+`FIPS_mode()`->`EVP_default_properties_is_fips_enabled()`
+`EVP_MD_CTX_set_flags()`->`EVP_default_properties_enable_fips()`
+specifically for enabling FIPS mode
+
+This change should workaround that by ifdef-ing old/new versions of
+openssl and APIs - so pre-3.0 use existing APIs (so not change there)
+and >=3.0 will use new APIs (whether it actually works or not is still
+TBD as this is just a first step in openssl-3.0 support)
+
+Should fix #886
+
+Test Plan:
+Run CI build that supports ubuntu-20.04 (openssl-1.1.1) and ubuntu-22.04
+(openssl-3.0.2)
+Both builds pass
+None of them have FIPS support (which for 1.1.x stays the same as
+before)
+
+Co-authored-by: Pavel Punsky <pavel.punsky@epicgames.com>
+---
+ src/apps/relay/ns_ioalib_engine_impl.c |  4 ++++
+ src/apps/uclient/startuclient.c        |  4 ++++
+ src/client/ns_turn_msg.c               | 16 +++++++++++++---
+ 3 files changed, 21 insertions(+), 3 deletions(-)
+
+diff --git a/src/apps/relay/ns_ioalib_engine_impl.c b/src/apps/relay/ns_ioalib_engine_impl.c
+index 0adb92f20..efcf8bcaf 100644
+--- a/src/apps/relay/ns_ioalib_engine_impl.c
++++ b/src/apps/relay/ns_ioalib_engine_impl.c
+@@ -1868,7 +1868,11 @@ int ssl_read(evutil_socket_t fd, SSL* ssl, ioa_network_buffer_handle nbh, int ve
+ 
+ 	} else if (!if1 && if2) {
+ 
++#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
++		if(verbose && SSL_get1_peer_certificate(ssl)) {
++#else
+ 		if(verbose && SSL_get_peer_certificate(ssl)) {
++#endif
+ 		  printf("\n------------------------------------------------------------\n");
+ 		  X509_NAME_print_ex_fp(stdout, X509_get_subject_name(SSL_get_peer_certificate(ssl)), 1,
+ 					XN_FLAG_MULTILINE);
+diff --git a/src/apps/uclient/startuclient.c b/src/apps/uclient/startuclient.c
+index 96e537225..036e39de8 100644
+--- a/src/apps/uclient/startuclient.c
++++ b/src/apps/uclient/startuclient.c
+@@ -138,7 +138,11 @@ static SSL* tls_connect(ioa_socket_raw fd, ioa_addr *remote_addr, int *try_again
+ 		if (rc > 0) {
+ 		  TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO,"%s: client session connected with cipher %s, method=%s\n",__FUNCTION__,
+ 				  SSL_get_cipher(ssl),turn_get_ssl_method(ssl,NULL));
++#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
++		  if(clnet_verbose && SSL_get1_peer_certificate(ssl)) {
++#else
+ 		  if(clnet_verbose && SSL_get_peer_certificate(ssl)) {
++#endif
+ 			  TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "------------------------------------------------------------\n");
+ 		  	X509_NAME_print_ex_fp(stdout, X509_get_subject_name(SSL_get_peer_certificate(ssl)), 1,
+ 		  						XN_FLAG_MULTILINE);
+diff --git a/src/client/ns_turn_msg.c b/src/client/ns_turn_msg.c
+index ad1e7f34a..b00c23e32 100644
+--- a/src/client/ns_turn_msg.c
++++ b/src/client/ns_turn_msg.c
+@@ -248,12 +248,22 @@ int stun_produce_integrity_key_str(const uint8_t *uname, const uint8_t *realm, c
+ 		if (FIPS_mode()) {
+ 			EVP_MD_CTX_set_flags(&ctx,EVP_MD_CTX_FLAG_NON_FIPS_ALLOW);
+ 		}
+-#endif
++#endif // defined EVP_MD_CTX_FLAG_NON_FIPS_ALLOW && !defined(LIBRESSL_VERSION_NUMBER)
+ 		EVP_DigestInit_ex(&ctx,EVP_md5(), NULL);
+ 		EVP_DigestUpdate(&ctx,str,strl);
+ 		EVP_DigestFinal(&ctx,key,&keylen);
+ 		EVP_MD_CTX_cleanup(&ctx);
+-#else
++#elif OPENSSL_VERSION_NUMBER >= 0x30000000L
++ 		unsigned int keylen = 0;
++ 		EVP_MD_CTX *ctx = EVP_MD_CTX_new();
++		if (EVP_default_properties_is_fips_enabled(NULL)) {
++			EVP_default_properties_enable_fips(NULL, 0);
++ 		}
++ 		EVP_DigestInit_ex(ctx,EVP_md5(), NULL);
++ 		EVP_DigestUpdate(ctx,str,strl);
++ 		EVP_DigestFinal(ctx,key,&keylen);
++ 		EVP_MD_CTX_free(ctx);
++#else // OPENSSL_VERSION_NUMBER < 0x10100000L
+ 		unsigned int keylen = 0;
+ 		EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+ #if defined EVP_MD_CTX_FLAG_NON_FIPS_ALLOW && ! defined(LIBRESSL_VERSION_NUMBER)
+@@ -265,7 +275,7 @@ int stun_produce_integrity_key_str(const uint8_t *uname, const uint8_t *realm, c
+ 		EVP_DigestUpdate(ctx,str,strl);
+ 		EVP_DigestFinal(ctx,key,&keylen);
+ 		EVP_MD_CTX_free(ctx);
+-#endif
++#endif // OPENSSL_VERSION_NUMBER < 0X10100000L
+ 		ret = 0;
+ 	}
+ 
