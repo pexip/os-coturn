@@ -35,7 +35,7 @@ diff --git a/src/apps/relay/ns_ioalib_engine_impl.c b/src/apps/relay/ns_ioalib_e
 index 0adb92f20..efcf8bcaf 100644
 --- a/src/apps/relay/ns_ioalib_engine_impl.c
 +++ b/src/apps/relay/ns_ioalib_engine_impl.c
-@@ -1868,7 +1868,11 @@ int ssl_read(evutil_socket_t fd, SSL* ssl, ioa_network_buffer_handle nbh, int ve
+@@ -1857,9 +1857,17 @@ int ssl_read(evutil_socket_t fd, SSL* ssl, ioa_network_buffer_handle nbh, int ve
  
  	} else if (!if1 && if2) {
  
@@ -45,13 +45,19 @@ index 0adb92f20..efcf8bcaf 100644
  		if(verbose && SSL_get_peer_certificate(ssl)) {
 +#endif
  		  printf("\n------------------------------------------------------------\n");
++#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
++		  X509_NAME_print_ex_fp(stdout, X509_get_subject_name(SSL_get1_peer_certificate(ssl)), 1,
++#else
  		  X509_NAME_print_ex_fp(stdout, X509_get_subject_name(SSL_get_peer_certificate(ssl)), 1,
++#endif
  					XN_FLAG_MULTILINE);
+ 		  printf("\n\n Cipher: %s\n", SSL_CIPHER_get_name(SSL_get_current_cipher(ssl)));
+ 		  printf("\n------------------------------------------------------------\n\n");
 diff --git a/src/apps/uclient/startuclient.c b/src/apps/uclient/startuclient.c
 index 96e537225..036e39de8 100644
 --- a/src/apps/uclient/startuclient.c
 +++ b/src/apps/uclient/startuclient.c
-@@ -138,7 +138,11 @@ static SSL* tls_connect(ioa_socket_raw fd, ioa_addr *remote_addr, int *try_again
+@@ -138,9 +138,17 @@ static SSL* tls_connect(ioa_socket_raw fd, ioa_addr *remote_addr, int *try_again
  		if (rc > 0) {
  		  TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO,"%s: client session connected with cipher %s, method=%s\n",__FUNCTION__,
  				  SSL_get_cipher(ssl),turn_get_ssl_method(ssl,NULL));
@@ -61,8 +67,38 @@ index 96e537225..036e39de8 100644
  		  if(clnet_verbose && SSL_get_peer_certificate(ssl)) {
 +#endif
  			  TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "------------------------------------------------------------\n");
++#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
++		  	X509_NAME_print_ex_fp(stdout, X509_get_subject_name(SSL_get1_peer_certificate(ssl)), 1,
++#else
  		  	X509_NAME_print_ex_fp(stdout, X509_get_subject_name(SSL_get_peer_certificate(ssl)), 1,
++#endif
  		  						XN_FLAG_MULTILINE);
+ 		  	TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "\n\n Cipher: %s\n", SSL_CIPHER_get_name(SSL_get_current_cipher(ssl)));
+ 		  	TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "\n------------------------------------------------------------\n\n");
+@@ -172,7 +180,11 @@
+ 		}
+ 	} while (1);
+ 
++#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
++	if (clnet_verbose && SSL_get1_peer_certificate(ssl)) {
++#else
+ 	if (clnet_verbose && SSL_get_peer_certificate(ssl)) {
++#endif
+ 		if(use_tcp) {
+ 			TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO,
+ 				"------TLS---------------------------------------------------\n");
+@@ -181,7 +193,11 @@
+ 				"------DTLS---------------------------------------------------\n");
+ 		}
+ 		X509_NAME_print_ex_fp(stdout, X509_get_subject_name(
++#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
++				SSL_get1_peer_certificate(ssl)), 1, XN_FLAG_MULTILINE);
++#else
+ 				SSL_get_peer_certificate(ssl)), 1, XN_FLAG_MULTILINE);
++#endif
+ 		TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "\n\n Cipher: %s\n",
+ 				SSL_CIPHER_get_name(SSL_get_current_cipher(ssl)));
+ 		TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO,
 diff --git a/src/client/ns_turn_msg.c b/src/client/ns_turn_msg.c
 index ad1e7f34a..b00c23e32 100644
 --- a/src/client/ns_turn_msg.c
