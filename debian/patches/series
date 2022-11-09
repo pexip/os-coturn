@@ -3,3 +3,4 @@ Fix-undefinded-OPENSSL_VERSION_1_1_1.patch
 disable-http-and-cli.patch
 Improve-OpenSSL-3-and-FIPS-support.patch
 no-RAND_pseudo_bytes.patch
+no-openssl3-deprecations.patch
