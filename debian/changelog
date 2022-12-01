@@ -1,4 +1,4 @@
-coturn (4.5.2-3pexip4) pexip-bullseye; urgency=medium
+coturn (4.5.2-3pexip4) pexip-bullseye-openssl3; urgency=medium
 
   * Build-Depend on libssl-dev 3
   * debian/patches/Improve-OpenSSL-3-and-FIPS-support.patch: backport and
