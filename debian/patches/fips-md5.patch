@@ -1,0 +1,57 @@
+diff --git a/src/apps/common/ns_turn_openssl.h b/src/apps/common/ns_turn_openssl.h
+index 8272f99..7d793f3 100644
+--- a/src/apps/common/ns_turn_openssl.h
++++ b/src/apps/common/ns_turn_openssl.h
+@@ -41,5 +41,8 @@
+ #include <openssl/opensslv.h>
+ #include <openssl/dh.h>
+ #include <openssl/bn.h>
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L
++# include <openssl/provider.h>
++#endif
+ 
+ #endif //__NST_OPENSSL_LIB__
+diff --git a/src/client/ns_turn_msg.c b/src/client/ns_turn_msg.c
+index ad1e7f34a..b00c23e32 100644
+--- a/src/client/ns_turn_msg.c
++++ b/src/client/ns_turn_msg.c
+@@ -255,18 +255,27 @@ int stun_produce_integrity_key_str(const uint8_t *uname, const uint8_t *realm, c
+ 		EVP_MD_CTX_cleanup(&ctx);
+ #elif OPENSSL_VERSION_NUMBER >= 0x30000000L
+  		unsigned int keylen = 0;
+- 		EVP_MD *md5 = EVP_MD_fetch(NULL, "MD5", "-fips");
+- 		EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+- 		if (md5 != NULL && ctx != NULL) {
+- 			EVP_DigestInit_ex(ctx,md5, NULL);
+- 			EVP_DigestUpdate(ctx,str,strl);
+- 			EVP_DigestFinal(ctx,key,&keylen);
+- 		} else {
+- 			fprintf(stderr, "MD5 is not supported\n");
+- 			ret = -1;
+- 		}
+- 		EVP_MD_CTX_free(ctx);
+- 		EVP_MD_free(md5);
++ 		OSSL_LIB_CTX *non_fips_ctx = OSSL_LIB_CTX_new();
++ 		if (non_fips_ctx == NULL) {
++ 			fprintf(stderr, "MD5 is not supported\n");
++ 			ret = -1;
++ 		} else {
++ 			OSSL_PROVIDER *provider = OSSL_PROVIDER_load(non_fips_ctx, "default");
++ 			EVP_MD *md5 = EVP_MD_fetch(non_fips_ctx, "MD5", NULL);
++ 			EVP_MD_CTX *ctx = EVP_MD_CTX_new();
++	 		if (md5 != NULL && ctx != NULL) {
++ 				EVP_DigestInit_ex(ctx,md5, NULL);
++ 				EVP_DigestUpdate(ctx,str,strl);
++ 				EVP_DigestFinal(ctx,key,&keylen);
++ 			} else {
++ 				fprintf(stderr, "MD5 is not supported\n");
++ 				ret = -1;
++ 			}
++ 			EVP_MD_CTX_free(ctx);
++ 			EVP_MD_free(md5);
++ 			OSSL_PROVIDER_unload(provider);
++ 			OSSL_LIB_CTX_free(non_fips_ctx);
++ 		}
+ #else // OPENSSL_VERSION_NUMBER < 0x10100000L
+ 		unsigned int keylen = 0;
+ 		EVP_MD_CTX *ctx = EVP_MD_CTX_new();
