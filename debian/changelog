@@ -1,3 +1,9 @@
+coturn (4.5.2-3pexip5) pexip-bullseye-openssl3; urgency=medium
+
+  * debian/patches/fips-md5.patch: fix use of MD5 in FIPS mode
+
+ -- John-Mark Bell <jmb@pexip.com>  Wed, 25 Jan 2023 12:41:49 +0000
+
 coturn (4.5.2-3pexip4) pexip-bullseye-openssl3; urgency=medium
 
   * Build-Depend on libssl-dev 3
