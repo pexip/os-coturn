@@ -1,3 +1,9 @@
+coturn (4.5.2-3pexip7) pexip; urgency=medium
+
+  * Fix distribution
+
+ -- Steve McIntyre <steve.mcintyre@pexip.com>  Wed, 25 Jan 2023 14:19:54 +0000
+
 coturn (4.5.2-3pexip6) pexip-bullseye-openssl3; urgency=medium
 
   * Merge openssl3 changes to bullseye
