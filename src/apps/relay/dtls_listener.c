@@ -55,12 +55,6 @@ struct dtls_listener_relay_server_info {
   ioa_engine_handle e;
   turn_turnserver *ts;
   int verbose;
-#if DTLS_SUPPORTED
-  SSL_CTX *dtls_ctx;
-#if DTLSv1_2_SUPPORTED
-  SSL_CTX *dtls_ctx_v1_2;
-#endif
-#endif
   struct event *udp_listen_ev;
   ioa_socket_handle udp_listen_s;
   ur_addr_map *children_ss; /* map of socket children on remote addr */
@@ -288,20 +282,20 @@ static ioa_socket_handle dtls_server_input_handler(dtls_listener_relay_server_ty
 #if DTLSv1_2_SUPPORTED
 	if(get_dtls_version(ioa_network_buffer_data(nbh),
 							(int)ioa_network_buffer_get_size(nbh)) == 1) {
-		connecting_ssl = SSL_new(server->dtls_ctx_v1_2);
+		connecting_ssl = SSL_new(server->e->dtls_ctx_v1_2);
 	} else {
-		connecting_ssl = SSL_new(server->dtls_ctx);
+		connecting_ssl = SSL_new(server->e->dtls_ctx);
 	}
 #else
 	{
-		connecting_ssl = SSL_new(server->dtls_ctx);
+		connecting_ssl = SSL_new(server->e->dtls_ctx);
 	}
 #endif
 
 	SSL_set_accept_state(connecting_ssl);
 
 	SSL_set_bio(connecting_ssl, NULL, wbio);
-	SSL_set_options(connecting_ssl, SSL_OP_COOKIE_EXCHANGE);
+	SSL_set_options(connecting_ssl, SSL_OP_COOKIE_EXCHANGE | SSL_OP_NO_RENEGOTIATION);
 
 	SSL_set_max_cert_list(connecting_ssl, 655350);
 
@@ -573,13 +567,13 @@ static int create_new_connected_udp_socket(
 #if DTLSv1_2_SUPPORTED
 		if(get_dtls_version(ioa_network_buffer_data(server->sm.m.sm.nd.nbh),
 							(int)ioa_network_buffer_get_size(server->sm.m.sm.nd.nbh)) == 1) {
-			connecting_ssl = SSL_new(server->dtls_ctx_v1_2);
+			connecting_ssl = SSL_new(server->e->dtls_ctx_v1_2);
 		} else {
-			connecting_ssl = SSL_new(server->dtls_ctx);
+			connecting_ssl = SSL_new(server->e->dtls_ctx);
 		}
 #else
 		{
-			connecting_ssl = SSL_new(server->dtls_ctx);
+			connecting_ssl = SSL_new(server->e->dtls_ctx);
 		}
 #endif
 
@@ -587,7 +581,8 @@ static int create_new_connected_udp_socket(
 
 		SSL_set_bio(connecting_ssl, NULL, wbio);
 
-		SSL_set_options(connecting_ssl, SSL_OP_COOKIE_EXCHANGE);
+		SSL_set_options(connecting_ssl, SSL_OP_COOKIE_EXCHANGE | SSL_OP_NO_RENEGOTIATION);
+
 		SSL_set_max_cert_list(connecting_ssl, 655350);
 		int rc = ssl_read(ret->fd, connecting_ssl, server->sm.m.sm.nd.nbh,
 				server->verbose);
@@ -912,14 +907,6 @@ static int init_server(dtls_listener_relay_server_type* server,
 
   if(!server) return -1;
 
-#if DTLS_SUPPORTED
-  server->dtls_ctx = e->dtls_ctx;
-
-#if DTLSv1_2_SUPPORTED
-  server->dtls_ctx_v1_2 = e->dtls_ctx_v1_2;
-#endif
-#endif
-
   server->ts = ts;
   server->connect_cb = send_socket;
 
@@ -935,36 +922,6 @@ static int init_server(dtls_listener_relay_server_type* server,
   server->verbose=verbose;
   
   server->e = e;
-  
-#if DTLS_SUPPORTED
-  if(server->dtls_ctx) {
-
-#if defined(REQUEST_CLIENT_CERT)
-	  /* If client has to authenticate, then  */
-	  SSL_CTX_set_verify(server->dtls_ctx, SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, dtls_verify_callback);
-#endif
-  
-	  SSL_CTX_set_read_ahead(server->dtls_ctx, 1);
-
-	  SSL_CTX_set_cookie_generate_cb(server->dtls_ctx, generate_cookie);
-	  SSL_CTX_set_cookie_verify_cb(server->dtls_ctx, verify_cookie);
-  }
-
-#if DTLSv1_2_SUPPORTED
-  if(server->dtls_ctx_v1_2) {
-
-  #if defined(REQUEST_CLIENT_CERT)
-  	  /* If client has to authenticate, then  */
-  	  SSL_CTX_set_verify(server->dtls_ctx_v1_2, SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, dtls_verify_callback);
-  #endif
-
-  	  SSL_CTX_set_read_ahead(server->dtls_ctx_v1_2, 1);
-
-  	  SSL_CTX_set_cookie_generate_cb(server->dtls_ctx_v1_2, generate_cookie);
-  	  SSL_CTX_set_cookie_verify_cb(server->dtls_ctx_v1_2, verify_cookie);
-    }
-#endif
-#endif
 
   return create_server_socket(server, report_creation);
 }
@@ -979,6 +936,23 @@ static int clean_server(dtls_listener_relay_server_type* server) {
 }
 
 ///////////////////////////////////////////////////////////
+
+#if DTLS_SUPPORTED
+void setup_dtls_callbacks(SSL_CTX *ctx) {
+  if (!ctx)
+    return;
+
+#if defined(REQUEST_CLIENT_CERT)
+  /* If client has to authenticate, then  */
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, dtls_verify_callback);
+#endif
+
+  SSL_CTX_set_read_ahead(ctx, 1);
+
+  SSL_CTX_set_cookie_generate_cb(ctx, generate_cookie);
+  SSL_CTX_set_cookie_verify_cb(ctx, verify_cookie);
+}
+#endif
 
 dtls_listener_relay_server_type* create_dtls_listener_server(const char* ifname,
 							     const char *local_address, 

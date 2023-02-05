@@ -39,6 +39,8 @@
 #if (defined LIBRESSL_VERSION_NUMBER && OPENSSL_VERSION_NUMBER == 0x20000000L)
 #undef OPENSSL_VERSION_NUMBER
 #define OPENSSL_VERSION_NUMBER 0x1000107FL
+#elif (!defined OPENSSL_VERSION_1_1_1)
+#define OPENSSL_VERSION_1_1_1 0x10101000L
 #endif
 
 ////// TEMPORARY data //////////
@@ -113,10 +115,24 @@ DH_2066, "", "", "",
 NULL, PTHREAD_MUTEX_INITIALIZER,
 
 //////////////// Common params ////////////////////
-TURN_VERBOSE_NONE,0,0,0,0,
-"/var/run/turnserver.pid","",
-DEFAULT_STUN_PORT,DEFAULT_STUN_TLS_PORT,0,0,0,1,
-0,0,0,0,0,
+TURN_VERBOSE_NONE, /* verbose */
+0, /* turn_daemon */
+0, /* no_software_attribute */
+0, /* web_admin_listen_on_workers */
+0, /* do_not_use_config_file */
+"/var/run/turnserver.pid", /* pidfile */
+"", /* acme_redirect */
+DEFAULT_STUN_PORT, /* listener_port*/
+DEFAULT_STUN_TLS_PORT, /* tls_listener_port */
+0, /* alt_listener_port */
+0, /* alt_tls_listener_port */
+0, /* tcp_proxy_port */
+1, /* rfc5780 */
+0, /* no_udp */
+0, /* no_tcp */
+0, /* tcp_use_proxy */
+0, /* no_tcp_relay */
+0, /* no_udp_relay */
 "",
 "",0,
 {
@@ -157,6 +173,8 @@ TURN_CREDENTIALS_NONE, /* ct */
 0, /* user_quota */
 #if !defined(TURN_NO_PROMETHEUS)
 0, /* prometheus disabled by default */
+DEFAULT_PROM_SERVER_PORT, /* prometheus port */
+0, /* prometheus username labelling disabled by default when prometheus is enabled */
 #endif
 ///////////// Users DB //////////////
 { (TURN_USERDB_TYPE)0, {"\0"}, {0,NULL, {NULL,0}} },
@@ -165,12 +183,14 @@ DEFAULT_CPUS_NUMBER,
 ///////// Encryption /////////
 "", /* secret_key_file */
 "", /* secret_key */
-0,  /* keep_address_family */
+ALLOCATION_DEFAULT_ADDRESS_FAMILY_IPV4,  /* allocation_default_address_family */
 0,  /* no_auth_pings */
 0,  /* no_dynamic_ip_list */
 0,  /* no_dynamic_realms */
 
-0  /* log_binding */
+0,  /* log_binding */
+0,	/* no_stun_backward_compatibility */
+0	/* response_origin_only_with_rfc5780 */
 };
 
 //////////////// OpenSSL Init //////////////////////
@@ -539,8 +559,10 @@ static char Usage[] = "Usage: turnserver [options]\n"
 "						The connection string has the same parameters as redis-userdb connection string.\n"
 #endif
 #if !defined(TURN_NO_PROMETHEUS)
-" --prometheus					Enable prometheus metrics. It is disabled by default. If it is enabled it will listen on port 9641 unther the path /metrics\n"
+" --prometheus					Enable prometheus metrics. It is disabled by default. If it is enabled it will listen on port 9641 under the path /metrics\n"
 "						also the path / on this port can be used as a health check\n"
+" --prometheus-port		<port>		Prometheus metrics port (Default: 9641).\n"
+" --prometheus-username-labels			When metrics are enabled, add labels with client usernames.\n"
 #endif
 " --use-auth-secret				TURN REST API flag.\n"
 "						Flag that sets a special authorization option that is based upon authentication secret\n"
@@ -602,11 +624,12 @@ static char Usage[] = "Usage: turnserver [options]\n"
 "						a log file. With this option everything will be going to the log file only\n"
 "						(unless the log file itself is stdout).\n"
 " --syslog					Output all log information into the system log (syslog), do not use the file output.\n"
+" --syslog-facility             <value>          Set syslog facility for syslog messages. Default is ''.\n"
 " --simple-log					This flag means that no log file rollover will be used, and the log file\n"
 "						name will be constructed as-is, without PID and date appendage.\n"
 "						This option can be used, for example, together with the logrotate tool.\n"
 " --new-log-timestamp				Enable full ISO-8601 timestamp in all logs.\n"
-" --new-log-timestamp-format    	<format>	Set timestamp format (in strftime(1) format)\n"
+" --new-log-timestamp-format    	<format>	Set timestamp format (in strftime(1) format). Depends on --new-log-timestamp to be enabled.\n"
 " --log-binding					Log STUN binding request. It is now disabled by default to avoid DoS attacks.\n"
 " --stale-nonce[=<value>]			Use extra security with nonce value having limited lifetime (default 600 secs).\n"
 " --max-allocate-lifetime	<value>		Set the maximum value for the allocation lifetime. Default to 3600 secs.\n"
@@ -643,9 +666,15 @@ static char Usage[] = "Usage: turnserver [options]\n"
 "						After the initialization, the turnserver process\n"
 "						will make an attempt to change the current group ID to that group.\n"
 " --mobility					Mobility with ICE (MICE) specs support.\n"
-" -K, --keep-address-family			TURN server allocates address family according TURN\n"
-"						Client <=> Server communication address family. \n"
+" -K, --keep-address-family			Deprecated in favor of --allocation-default-address-family!!\n"
+"						TURN server allocates address family according TURN\n"
+"						Client <=> Server communication address family.\n"
 "						!! It breaks RFC6156 section-4.2 (violates default IPv4) !!\n"
+" -A --allocation-default-address-family=<ipv4|ipv6|keep> 		Default is IPv4\n"
+"						TURN server allocates address family according TURN client requested address family. \n"
+"						If address family is not requested explicitly by client, then it falls back to this default.\n"
+"						The standard RFC explicitly define actually that this default must be IPv4,\n"
+"                       so use other option values with care!\n"
 " --no-cli					Turn OFF the CLI support. By default it is always ON.\n"
 " --cli-ip=<IP>					Local system IP address to be used for CLI server endpoint. Default value\n"
 "						is 127.0.0.1.\n"
@@ -659,7 +688,7 @@ static char Usage[] = "Usage: turnserver [options]\n"
 "						is 127.0.0.1.\n"
 " --web-admin-port=<port>			Web-admin server port. Default is 8080.\n"
 " --web-admin-listen-on-workers			Enable for web-admin server to listens on STUN/TURN workers STUN/TURN ports.\n"
-"						By default it is disabled for security resons!\n"
+"						By default it is disabled for security reasons!\n"
 "						(This behavior used to be the default behavior, and was enabled by default.)\n"
 " --server-relay					Server relay. NON-STANDARD AND DANGEROUS OPTION. Only for those applications\n"
 "						when we want to run server applications on the relay endpoints.\n"
@@ -668,6 +697,16 @@ static char Usage[] = "Usage: turnserver [options]\n"
 " --cli-max-output-sessions			Maximum number of output sessions in ps CLI command.\n"
 "						This value can be changed on-the-fly in CLI. The default value is 256.\n"
 " --ne=[1|2|3]					Set network engine type for the process (for internal purposes).\n"
+" --no-rfc5780					Disable RFC5780 (NAT behavior discovery).\n"
+"						Originally, if there are more than one listener address from the same\n"
+"						address family, then by default the NAT behavior discovery feature enabled.\n"
+"						This option disables this original behavior, because the NAT behavior discovery\n"
+"						adds attributes to response, and this increase the possibility of an amplification attack.\n"
+"						Strongly encouraged to use this option to decrease gain factor in STUN binding responses.\n"
+" --no-stun-backward-compatibility		Disable handling old STUN Binding requests and disable MAPPED-ADDRESS attribute\n"
+"						in binding response (use only the XOR-MAPPED-ADDRESS).\n"
+" --response-origin-only-with-rfc5780		Only send RESPONSE-ORIGIN attribute in binding response if RFC5780 is enabled.\n"
+" --version					Print version (and exit).\n"
 " -h						Help\n"
 "\n";
 
@@ -729,7 +768,7 @@ static char AdminUsage[] = "Usage: turnadmin [command] [options]\n"
 	"					Setting to zero value means removal of the option.\n"
 	"	-h, --help			Help\n";
 
-#define OPTIONS "c:d:p:L:E:X:i:m:l:r:u:b:B:e:M:J:N:O:q:Q:s:C:K:vVofhznaAS"
+#define OPTIONS "c:d:p:L:E:X:i:m:l:r:u:b:B:e:M:J:N:O:q:Q:s:C:K:A:vVofhznaS"
 
 #define ADMIN_OPTIONS "PEgGORIHKYlLkaADSdb:e:M:J:N:u:r:p:s:X:o:h:x:v:f:"
 
@@ -754,6 +793,8 @@ enum EXTRA_OPTS {
 	CHANNEL_LIFETIME_OPT,
 	PERMISSION_LIFETIME_OPT,
 	PROMETHEUS_OPT,
+	PROMETHEUS_PORT_OPT,
+	PROMETHEUS_ENABLE_USERNAMES_OPT,
 	AUTH_SECRET_OPT,
 	NO_AUTH_PINGS_OPT,
 	NO_DYNAMIC_IP_LIST_OPT,
@@ -763,6 +804,7 @@ enum EXTRA_OPTS {
 	AUTH_SECRET_TS_EXP, /* deprecated */
 	NO_STDOUT_LOG_OPT,
 	SYSLOG_OPT,
+	SYSLOG_FACILITY_OPT,
 	SIMPLE_LOG_OPT,
 	NEW_LOG_TIMESTAMP_OPT,
 	NEW_LOG_TIMESTAMP_FORMAT_OPT,
@@ -813,7 +855,11 @@ enum EXTRA_OPTS {
 	NO_HTTP_OPT,
 	SECRET_KEY_OPT,
 	ACME_REDIRECT_OPT,
-	LOG_BINDING_OPT
+	LOG_BINDING_OPT,
+	NO_RFC5780,
+	NO_STUN_BACKWARD_COMPATIBILITY_OPT,
+	RESPONSE_ORIGIN_ONLY_WITH_RFC5780_OPT,
+	VERSION_OPT
 };
 
 struct myoption {
@@ -866,6 +912,8 @@ static const struct myoption long_options[] = {
 #endif
 #if !defined(TURN_NO_PROMETHEUS)
 				{ "prometheus", optional_argument, NULL, PROMETHEUS_OPT },
+				{ "prometheus-port", optional_argument, NULL, PROMETHEUS_PORT_OPT },
+				{ "prometheus-username-labels", optional_argument, NULL, PROMETHEUS_ENABLE_USERNAMES_OPT },
 #endif
 				{ "use-auth-secret", optional_argument, NULL, AUTH_SECRET_OPT },
 				{ "static-auth-secret", required_argument, NULL, STATIC_AUTH_SECRET_VAL_OPT },
@@ -947,9 +995,14 @@ static const struct myoption long_options[] = {
 				{ "no-tlsv1_2", optional_argument, NULL, NO_TLSV1_2_OPT },
 				{ "secret-key-file", required_argument, NULL, SECRET_KEY_OPT },
 				{ "keep-address-family", optional_argument, NULL, 'K' },
+				{ "allocation-default-address-family", required_argument, NULL, 'A' },
 				{ "acme-redirect", required_argument, NULL, ACME_REDIRECT_OPT },
 				{ "log-binding", optional_argument, NULL, LOG_BINDING_OPT },
-
+				{ "no-rfc5780", optional_argument, NULL, NO_RFC5780 },
+				{ "no-stun-backward-compatibility", optional_argument, NULL, NO_STUN_BACKWARD_COMPATIBILITY_OPT },
+				{ "response-origin-only-with-rfc5780", optional_argument, NULL, RESPONSE_ORIGIN_ONLY_WITH_RFC5780_OPT },
+				{ "version", optional_argument, NULL, VERSION_OPT },
+				{ "syslog-facility", required_argument, NULL, SYSLOG_FACILITY_OPT },
 				{ NULL, no_argument, NULL, 0 }
 };
 
@@ -1167,7 +1220,24 @@ static void set_option(int c, char *value)
 
   switch (c) {
 	case 'K':
-		turn_params.keep_address_family = get_bool_value(value);
+		if (get_bool_value(value))
+			turn_params.allocation_default_address_family = ALLOCATION_DEFAULT_ADDRESS_FAMILY_KEEP;
+		break;
+	case 'A':
+		if (value && strlen(value) > 0) {
+			if(*value == '=') ++value;
+			if (!strcmp(value, "ipv6")) {
+				turn_params.allocation_default_address_family = ALLOCATION_DEFAULT_ADDRESS_FAMILY_IPV6;
+			} else if (!strcmp(value,"keep")) {
+				turn_params.allocation_default_address_family = ALLOCATION_DEFAULT_ADDRESS_FAMILY_KEEP;
+			} else if (!strcmp(value, "ipv4")) {
+				turn_params.allocation_default_address_family = ALLOCATION_DEFAULT_ADDRESS_FAMILY_IPV4;
+			} else {
+				TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "ERROR: invalid allocation_default_address_family parameter\n");
+			}
+		} else {
+			TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "ERROR: invalid allocation_default_address_family parameter\n");
+		}
 		break;
   case SERVER_NAME_OPT:
 	  STRCPY(turn_params.oauth_server_name,value);
@@ -1478,6 +1548,12 @@ static void set_option(int c, char *value)
 	case PROMETHEUS_OPT:
 		turn_params.prometheus = 1;
 		break;
+	case PROMETHEUS_PORT_OPT:
+		turn_params.prometheus_port = atoi(value);
+		break;
+	case PROMETHEUS_ENABLE_USERNAMES_OPT:
+		turn_params.prometheus_username_labels = 1;
+		break;
 #endif
 	case AUTH_SECRET_OPT:
 		turn_params.use_auth_secret_with_timestamp = 1;
@@ -1606,6 +1682,15 @@ static void set_option(int c, char *value)
 	case LOG_BINDING_OPT:
 		turn_params.log_binding = get_bool_value(value);
 		break;
+	case NO_RFC5780:
+		turn_params.rfc5780 = 0;
+		break;
+	case NO_STUN_BACKWARD_COMPATIBILITY_OPT:
+		turn_params.no_stun_backward_compatibility = get_bool_value(value);
+		break;
+	case RESPONSE_ORIGIN_ONLY_WITH_RFC5780_OPT:
+		turn_params.response_origin_only_with_rfc5780 = get_bool_value(value);
+		break;
 
 	/* these options have been already taken care of before: */
 	case 'l':
@@ -1614,6 +1699,7 @@ static void set_option(int c, char *value)
 	case SIMPLE_LOG_OPT:
 	case NEW_LOG_TIMESTAMP_OPT:
 	case NEW_LOG_TIMESTAMP_FORMAT_OPT:
+	case SYSLOG_FACILITY_OPT:
 	case 'c':
 	case 'n':
 	case 'h':
@@ -1692,7 +1778,10 @@ static void read_config_file(int argc, char **argv, int pass)
 				} else if (!strcmp(argv[i], "-h")) {
 					printf("\n%s\n",Usage);
 					exit(0);
-				}
+				} else if (!strcmp(argv[i], "--version")) {
+                    printf("%s\n",TURN_SERVER_VERSION);
+                    exit(0);
+                }
 			}
 		}
 	}
@@ -1744,6 +1833,8 @@ static void read_config_file(int argc, char **argv, int pass)
 						use_new_log_timestamp_format=1;
 					} else if ((pass==0) && (c==NEW_LOG_TIMESTAMP_FORMAT_OPT)) {
 						set_turn_log_timestamp_format(value);
+					} else if((pass==0) && (c==SYSLOG_FACILITY_OPT)) {
+						set_syslog_facility(value);	
 					} else if((pass == 1) && (c != 'u')) {
 						set_option(c, value);
 					} else if((pass == 2) && (c == 'u')) {
@@ -1760,7 +1851,7 @@ static void read_config_file(int argc, char **argv, int pass)
 
 		} else
 			TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "WARNING: Cannot find config file: %s. Default and command-line settings will be used.\n",
-					config_file);
+                          config_file);
 
 		if (full_path_to_config_file) {
 			free(full_path_to_config_file);
@@ -2230,6 +2321,9 @@ int main(int argc, char **argv)
 			case NEW_LOG_TIMESTAMP_FORMAT_OPT:
 				set_turn_log_timestamp_format(optarg);
 				break;
+			case SYSLOG_FACILITY_OPT:
+				set_syslog_facility(optarg);
+				break;				
 			default:
 				;
 			}
@@ -2363,7 +2457,7 @@ int main(int argc, char **argv)
 		}
         }
 
-	if(use_cli && cli_password[0]==0 && use_cli) {
+	if(use_cli && cli_password[0]==0) {
 		TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "\nCONFIG ERROR: Empty cli-password, and so telnet cli interface is disabled! Please set a non empty cli-password!\n");
 		use_cli = 0;
 	}
@@ -2524,11 +2618,15 @@ int main(int argc, char **argv)
 
 	drop_privileges();
 #if !defined(TURN_NO_PROMETHEUS)
-	if (start_prometheus_server()){
-	  TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "\nCould not start Prometheus collector!\n");
+	int prometheus_status = start_prometheus_server();
+	if (prometheus_status < 0) {
+	  TURN_LOG_FUNC(TURN_LOG_LEVEL_ERROR, "Could not start Prometheus collector!\n");
+	}
+	else if (prometheus_status == 1) {
+	  TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "Prometheus collector disabled, not started.\n");
 	}
 	else {
-	  TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "\nPrometheus collector started sucessfully.\n");
+	  TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "Prometheus collector started successfully.\n");
 	}
 #endif
 
@@ -2661,8 +2759,7 @@ static void adjust_key_file_name(char *fn, const char* file_title, int critical)
 	  strncpy(fn,full_path_to_file,sizeof(turn_params.cert_file)-1);
 	  fn[sizeof(turn_params.cert_file)-1]=0;
 
-	  if(full_path_to_file)
-	    free(full_path_to_file);
+	  free(full_path_to_file);
 	  return;
 	}
 
@@ -3172,10 +3269,12 @@ static void openssl_load_certificates(void)
 		set_ctx(&turn_params.dtls_ctx,"DTLS",DTLS_server_method());
 		set_ctx(&turn_params.dtls_ctx_v1_2,"DTLS1.2",DTLSv1_2_server_method());
 		SSL_CTX_set_read_ahead(turn_params.dtls_ctx_v1_2, 1);
+		setup_dtls_callbacks(turn_params.dtls_ctx_v1_2);
 #else
 		set_ctx(&turn_params.dtls_ctx,"DTLS",DTLSv1_server_method());
 #endif
 		SSL_CTX_set_read_ahead(turn_params.dtls_ctx, 1);
+		setup_dtls_callbacks(turn_params.dtls_ctx);
 
 		TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "DTLS cipher suite: %s\n",turn_params.cipher_list);
 
