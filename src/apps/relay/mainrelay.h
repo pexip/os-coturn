@@ -80,6 +80,7 @@
 #include <openssl/aes.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#include <openssl/ssl.h>
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
   #include <openssl/modes.h>
@@ -317,7 +318,9 @@ typedef struct _turn_params_ {
   vint total_quota;
   vint user_quota;
   #if !defined(TURN_NO_PROMETHEUS)
-  int  prometheus;
+  int prometheus;
+  int prometheus_port;
+  int  prometheus_username_labels;
   #endif
 
 
@@ -332,12 +335,14 @@ typedef struct _turn_params_ {
   ///////// Encryption /////////
   char secret_key_file[1025];
   unsigned char secret_key[1025];
-  int keep_address_family;
+  ALLOCATION_DEFAULT_ADDRESS_FAMILY allocation_default_address_family;
   int no_auth_pings;
   int no_dynamic_ip_list;
   int no_dynamic_realms;
 
   vint log_binding;
+  vint no_stun_backward_compatibility;
+  vint response_origin_only_with_rfc5780;
 } turn_params_t;
 
 extern turn_params_t turn_params;

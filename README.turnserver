@@ -33,6 +33,12 @@ If the systemd development library is available, then it will notify systemd abo
 
 RUNNING THE TURN SERVER
 
+To run the coturn server as a daemon use:
+
+  $ turnserver -o
+
+Note that if you make any changes to the config file the server has to be restarted.
+
 Options note: turnserver has long and short option names, for most options.
 Some options have only long form, some options have only short form. Their syntax
 somewhat different, if an argument is required:
@@ -275,9 +281,16 @@ Flags:
 			check: across the session, all requests must have the same
 			main ORIGIN attribute value (if the ORIGIN was
 			initially used by the session).
- --prometheus		Enable prometheus metrics. By default it is
-			disabled. Would listen on port 9641 unther the path /metrics
+
+--prometheus		Enable prometheus metrics. By default it is
+			disabled. Would listen on port 9641 under the path /metrics
 			also the path / on this port can be used as a health check
+ --prometheus-username-labels	Enable labeling prometheus traffic
+			metrics with client usernames. Labeling with client usernames is
+			disabled by default, beacuse this may cause memory leaks when using
+			authentication with ephemeral usernames (e.g. TURN REST API).
+
+--prometheus-port	Prometheus listener port (Default: 9641).
 
 -h			Help.
 
@@ -566,9 +579,16 @@ Options with values:
 --proc-group		Group name to run the process. After the initialization, the turnserver process
 			will make an attempt to change the current group ID to that group.
 
--K, --keep-address-family		TURN server allocates address family according TURN
+-K, --keep-address-family			Deprecated and will be removed in favor of --allocation-default-address-family!!
+			TURN server allocates address family according TURN
 			Client <=> Server communication address family.
 			!! It breaks RFC6156 section-4.2 (violates default IPv4) !!
+
+-A --allocation-default-address-family=<ipv4|ipv6|keep> 		Default is IPv4
+			TURN server allocates address family according TURN client requested address family.
+			If address family not requested explicitly by the client, then it falls back to this default.
+			The standard RFC explicitly define that this default must be IPv4, 
+			so use other option values with care!
 
 --cli-ip		Local system IP address to be used for CLI management interface.
 			The turnserver process can be accessed for management with telnet,
@@ -592,10 +612,19 @@ Options with values:
 
 --web-admin-port=<port>  Web-admin server port. Default is 8080.
 --web-admin-listen-on-workers   Enable for web-admin server to listens on STUN/TURN workers STUN/TURN ports.
-			By default it is disabled for security resons!
+			By default it is disabled for security reasons!
 			(This behavior used to be the default behavior, and was enabled by default.)
 
 --ne=[1|2|3]		Set network engine type for the process (for internal purposes).
+--no-rfc5780		Disable RFC5780 (NAT behavior discovery).
+                    Originally, if there are more than one listener address from the same
+                    address family, then by default the NAT behavior discovery feature enabled.
+                    This option disables this original behavior, because the NAT behavior discovery
+                    adds attributes to response, and this increase the possibility of an amplification attack.
+                    Strongly encouraged to use this option to decrease gain factor in STUN binding responses.
+--no-stun-backward-compatibility		Disable handling old STUN Binding requests and disable MAPPED-ADDRESS attribute in binding response (use only the XOR-MAPPED-ADDRESS).
+--response-origin-only-with-rfc5780		Only send RESPONSE-ORIGIN attribute in binding response if RFC5780 is enabled.
+					
 
 ==================================
 
@@ -790,7 +819,7 @@ in a batch script). See the file turndb/testsqldbsetup.sql as an example.
 4) The same is true for MySQL database. The same schema file is applicable.
 The same considerations are applicable.
 
-5) The same is true for the Redis database, but the Redis database has aa different schema -
+5) The same is true for the Redis database, but the Redis database has a different schema -
 it can be found (in the form of explanation) in schema.userdb.redis.
 Also, in Redis you can store both "keys" and open passwords (for long term credentials) -
 the "open password" option is less secure but more convenient for low-security environments.
