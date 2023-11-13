@@ -7,11 +7,9 @@ Forwarded: not-needed
  src/apps/relay/mainrelay.c | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
-diff --git a/src/apps/relay/mainrelay.c b/src/apps/relay/mainrelay.c
-index 2118b60..bbf7fa3 100644
 --- a/src/apps/relay/mainrelay.c
 +++ b/src/apps/relay/mainrelay.c
-@@ -2593,7 +2593,7 @@ static int THREAD_setup(void) {
+@@ -2691,7 +2691,7 @@
  
  	mutex_buf_initialized = 1;
  
@@ -20,7 +18,7 @@ index 2118b60..bbf7fa3 100644
  	CRYPTO_THREADID_set_callback(coturn_id_function);
  #else
  	CRYPTO_set_id_callback(coturn_id_function);
-@@ -2615,7 +2615,7 @@ int THREAD_cleanup(void) {
+@@ -2713,7 +2713,7 @@
    if (!mutex_buf_initialized)
      return 0;
  
