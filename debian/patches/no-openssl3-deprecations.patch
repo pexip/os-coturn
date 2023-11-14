@@ -1,8 +1,8 @@
-diff --git a/src/apps/relay/mainrelay.c b/src/apps/relay/mainrelay.c
-index 2118b60..c015957 100644
---- a/src/apps/relay/mainrelay.c
-+++ b/src/apps/relay/mainrelay.c
-@@ -1031,20 +1031,17 @@ void encrypt_aes_128(unsigned  char* in, const unsigned char* mykey){
+Index: os-coturn/src/apps/relay/mainrelay.c
+===================================================================
+--- os-coturn.orig/src/apps/relay/mainrelay.c
++++ os-coturn/src/apps/relay/mainrelay.c
+@@ -1084,20 +1084,17 @@ void encrypt_aes_128(unsigned  char* in,
  
      int j=0,k=0;
      int totalSize=0;
@@ -33,7 +33,7 @@ index 2118b60..c015957 100644
  
      totalSize += strlen((char*)in);
      size = strlen((char*)in);
-@@ -1119,22 +1116,18 @@ int decodedTextSize(char *input){
+@@ -1172,22 +1169,18 @@ int decodedTextSize(char *input){
  void decrypt_aes_128(char* in, const unsigned char* mykey){
  
      unsigned char iv[8] = {0};
@@ -63,7 +63,7 @@ index 2118b60..c015957 100644
  
      strcat(last,(char*)outdata);
      printf("%s\n",last);
-@@ -2542,7 +2535,7 @@ int main(int argc, char **argv)
+@@ -2640,7 +2633,7 @@ int main(int argc, char **argv)
  
  ////////// OpenSSL locking ////////////////////////////////////////
  
@@ -72,7 +72,7 @@ index 2118b60..c015957 100644
  
  static char some_buffer[65536];
  
-@@ -2581,7 +2574,7 @@ unsigned long coturn_id_function(void)
+@@ -2679,7 +2672,7 @@ unsigned long coturn_id_function(void)
  
  static int THREAD_setup(void) {
  
@@ -81,7 +81,7 @@ index 2118b60..c015957 100644
  
  	int i;
  
-@@ -2608,7 +2601,7 @@ static int THREAD_setup(void) {
+@@ -2706,7 +2699,7 @@ static int THREAD_setup(void) {
  int THREAD_cleanup(void);
  int THREAD_cleanup(void) {
  
@@ -90,7 +90,7 @@ index 2118b60..c015957 100644
  
    int i;
  
-@@ -2688,125 +2681,57 @@ static void adjust_key_file_names(void)
+@@ -2785,125 +2778,57 @@ static void adjust_key_file_names(void)
  	if(turn_params.dh_file[0])
  		adjust_key_file_name(turn_params.dh_file,"DH key",0);
  }
@@ -114,26 +114,17 @@ index 2118b60..c015957 100644
 -					0x6C,0x7E,0xD1,0x44,0xCB,0xF9,0x2D,0x1E,0x4A,0x9A,0x32,0x81,
 -					0x58,0xE1,0xE1,0x17,0xC1,0x9C,0xF1,0x1E,0x96,0x2D,0x5F
 -	};
-+	BIO_free(bio);
- 
+-
 -//	-----BEGIN DH PARAMETERS-----
 -//MEwCRzZTqJw88dEbLaJk3lk744wndMK+m21W59//Z2rSDOieUgAFs1P3HEGyrDgW
 -//MjqOkGx+0UTL+S0eSpoygVjh4RfBnPEeli1fAgEF
 -//	-----END DH PARAMETERS-----
-+	return pkey;
-+}
++	BIO_free(bio);
  
 -	unsigned char dh566_g[] = { 0x05 };
 -	DH *dh;
-+static EVP_PKEY *get_dh1066(void) {
-+	EVP_PKEY *pkey;
-+	BIO *bio = BIO_new(BIO_s_mem());
-+	BIO_puts(bio,
-+		"-----BEGIN DH PARAMETERS-----\n"
-+		"MIGMAoGGAg4mb6qfqOU/cIjxqSmuGiuoL+jlDoF41xJB3OLVEG+KNSPOZpNnFOoK\n"
-+		"YdRDY1zf3vW5xrSMuholn3MPHhqXQi5gnkw8cGr73ap6SKUeh8ijXiZAG94IXqK4\n"
-+		"6HZD6PFLNUw4krn/YeZsuvkWNjxpLVeQYorQ1PuyWmGZqeiTgKK33LFqr+MCAQI=\n"
-+		"-----END DH PARAMETERS-----");
++	return pkey;
++}
  
 -	if ((dh = DH_new()) == NULL )
 -		return (NULL );
@@ -146,8 +137,7 @@ index 2118b60..c015957 100644
 -#endif
 -	return (dh);
 -}
-+	pkey = PEM_read_bio_Parameters(bio, NULL);
- 
+-
 -static DH *get_dh1066(void) {
 -
 -	unsigned char dh1066_p[] = {
@@ -170,10 +160,20 @@ index 2118b60..c015957 100644
 -//	YdRDY1zf3vW5xrSMuholn3MPHhqXQi5gnkw8cGr73ap6SKUeh8ijXiZAG94IXqK4
 -//	6HZD6PFLNUw4krn/YeZsuvkWNjxpLVeQYorQ1PuyWmGZqeiTgKK33LFqr+MCAQI=
 -//	-----END DH PARAMETERS-----
--
++static EVP_PKEY *get_dh1066(void) {
++	EVP_PKEY *pkey;
++	BIO *bio = BIO_new(BIO_s_mem());
++	BIO_puts(bio,
++		"-----BEGIN DH PARAMETERS-----\n"
++		"MIGMAoGGAg4mb6qfqOU/cIjxqSmuGiuoL+jlDoF41xJB3OLVEG+KNSPOZpNnFOoK\n"
++		"YdRDY1zf3vW5xrSMuholn3MPHhqXQi5gnkw8cGr73ap6SKUeh8ijXiZAG94IXqK4\n"
++		"6HZD6PFLNUw4krn/YeZsuvkWNjxpLVeQYorQ1PuyWmGZqeiTgKK33LFqr+MCAQI=\n"
++		"-----END DH PARAMETERS-----");
+ 
 -	unsigned char dh1066_g[] = { 0x02 };
 -	DH *dh;
--
++	pkey = PEM_read_bio_Parameters(bio, NULL);
+ 
 -	if ((dh = DH_new()) == NULL )
 -		return (NULL );
 -#if OPENSSL_VERSION_NUMBER < 0x10100000L
@@ -184,11 +184,8 @@ index 2118b60..c015957 100644
 -	DH_set0_pqg(dh, BN_bin2bn(dh1066_p, sizeof(dh1066_p), NULL ), NULL, BN_bin2bn(dh1066_g, sizeof(dh1066_g), NULL ));
 -#endif
 -	return (dh);
-+	BIO_free(bio);
-+
-+	return pkey;
- }
- 
+-}
+-
 -static DH *get_dh2066(void) {
 -
 -	unsigned char dh2066_p[] = {
@@ -224,10 +221,13 @@ index 2118b60..c015957 100644
 -//qhZaNkkXd7d0vT4/mCBZXsdy6KOJIbQ8JfT0IZZapnf/LDr8mF/BvyrPuGJnI+gv
 -//zHsyG2szZwrL0B9l14RU9vGItbsMY2U05GZLAgEF
 -//	-----END DH PARAMETERS-----
--
++	BIO_free(bio);
+ 
 -	unsigned char dh2066_g[] = { 0x05 };
 -	DH *dh;
--
++	return pkey;
++}
+ 
 -	if ((dh = DH_new()) == NULL )
 -		return (NULL );
 -#if OPENSSL_VERSION_NUMBER < 0x10100000L
@@ -259,7 +259,7 @@ index 2118b60..c015957 100644
  }
  
  static int pem_password_func(char *buf, int size, int rwflag, void *password)
-@@ -2897,12 +2822,16 @@ static void set_ctx(SSL_CTX** out, const char *protocol, const SSL_METHOD* metho
+@@ -2994,12 +2919,16 @@ static void set_ctx(SSL_CTX** out, const
  	}
  
  	if (!SSL_CTX_use_PrivateKey_file(ctx, turn_params.pkey_file, SSL_FILETYPE_PEM)) {
@@ -276,7 +276,7 @@ index 2118b60..c015957 100644
  	} else {
  		print_abs_file_name(protocol, ": Private key", turn_params.pkey_file);
  	}
-@@ -2957,14 +2886,10 @@ static void set_ctx(SSL_CTX** out, const char *protocol, const SSL_METHOD* metho
+@@ -3054,14 +2983,10 @@ static void set_ctx(SSL_CTX** out, const
  			}
  
  			{
@@ -292,7 +292,7 @@ index 2118b60..c015957 100644
  				}
  			}
  		}
-@@ -2982,27 +2907,26 @@ static void set_ctx(SSL_CTX** out, const char *protocol, const SSL_METHOD* metho
+@@ -3079,27 +3004,26 @@ static void set_ctx(SSL_CTX** out, const
  
  	{//DH algorithms:
  
@@ -334,7 +334,7 @@ index 2118b60..c015957 100644
  		}
  
  		/*
-@@ -3013,15 +2937,22 @@ static void set_ctx(SSL_CTX** out, const char *protocol, const SSL_METHOD* metho
+@@ -3110,15 +3034,22 @@ static void set_ctx(SSL_CTX** out, const
  		}
  		*/
  
@@ -360,7 +360,7 @@ index 2118b60..c015957 100644
  		}
  	}
  
-@@ -3110,8 +3041,10 @@ static void openssl_load_certificates(void);
+@@ -3207,8 +3138,10 @@ static void openssl_load_certificates(vo
  static void openssl_setup(void)
  {
  	THREAD_setup();
@@ -371,7 +371,7 @@ index 2118b60..c015957 100644
  
  #if !TLS_SUPPORTED
  	if(!turn_params.no_tls) {
-@@ -3144,6 +3077,7 @@ static void openssl_load_certificates(void)
+@@ -3241,6 +3174,7 @@ static void openssl_load_certificates(vo
  	pthread_mutex_lock(&turn_params.tls_mutex);
  	if(!turn_params.no_tls) {
  		set_ctx(&turn_params.tls_ctx_ssl23,"SSL23",SSLv23_server_method()); /*compatibility mode */
@@ -379,30 +379,31 @@ index 2118b60..c015957 100644
  		if(!turn_params.no_tlsv1) {
  			set_ctx(&turn_params.tls_ctx_v1_0,"TLS1.0",TLSv1_server_method());
  		}
-@@ -3156,6 +3090,7 @@ static void openssl_load_certificates(void)
- 			set_ctx(&turn_params.tls_ctx_v1_2,"TLS1.2",TLSv1_2_server_method());
+@@ -3254,6 +3188,7 @@ static void openssl_load_certificates(vo
  		}
  #endif
-+#endif
  #endif
++#endif
  		TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "TLS cipher suite: %s\n",turn_params.cipher_list);
  	}
-@@ -3170,8 +3105,10 @@ static void openssl_load_certificates(void)
+ 
+@@ -3267,9 +3202,11 @@ static void openssl_load_certificates(vo
  
  #if DTLSv1_2_SUPPORTED
  		set_ctx(&turn_params.dtls_ctx,"DTLS",DTLS_server_method());
-+#if (OPENSSL_VERSION_NUMBER < 0x30000000L)
++#if (OPENSSL_VERSION_NUMBER < 0x30000000L
  		set_ctx(&turn_params.dtls_ctx_v1_2,"DTLS1.2",DTLSv1_2_server_method());
  		SSL_CTX_set_read_ahead(turn_params.dtls_ctx_v1_2, 1);
+ 		setup_dtls_callbacks(turn_params.dtls_ctx_v1_2);
 +#endif
  #else
  		set_ctx(&turn_params.dtls_ctx,"DTLS",DTLSv1_server_method());
  #endif
-diff --git a/src/apps/uclient/mainuclient.c b/src/apps/uclient/mainuclient.c
-index 8a824cc..cf775e1 100644
---- a/src/apps/uclient/mainuclient.c
-+++ b/src/apps/uclient/mainuclient.c
-@@ -470,8 +470,10 @@ int main(int argc, char **argv)
+Index: os-coturn/src/apps/uclient/mainuclient.c
+===================================================================
+--- os-coturn.orig/src/apps/uclient/mainuclient.c
++++ os-coturn/src/apps/uclient/mainuclient.c
+@@ -474,8 +474,10 @@ int main(int argc, char **argv)
  
  	if(use_secure) {
  
@@ -413,7 +414,7 @@ index 8a824cc..cf775e1 100644
  
  		const char *csuite = "ALL"; //"AES256-SHA" "DH"
  		if(use_null_cipher)
-@@ -484,6 +486,7 @@ int main(int argc, char **argv)
+@@ -488,6 +490,7 @@ int main(int argc, char **argv)
  		  SSL_CTX_set_cipher_list(root_tls_ctx[root_tls_ctx_num], csuite);
  		  root_tls_ctx_num++;
  
@@ -421,15 +422,15 @@ index 8a824cc..cf775e1 100644
  		  root_tls_ctx[root_tls_ctx_num] = SSL_CTX_new(TLSv1_client_method());
  		  SSL_CTX_set_cipher_list(root_tls_ctx[root_tls_ctx_num], csuite);
  		  root_tls_ctx_num++;
-@@ -497,6 +500,7 @@ int main(int argc, char **argv)
- 		  SSL_CTX_set_cipher_list(root_tls_ctx[root_tls_ctx_num], csuite);
+@@ -502,6 +505,7 @@ int main(int argc, char **argv)
  		  root_tls_ctx_num++;
  #endif
-+#endif
  #endif
++#endif
  		} else {
  #if !DTLS_SUPPORTED
-@@ -506,6 +510,7 @@ int main(int argc, char **argv)
+ 		  fprintf(stderr,"ERROR: DTLS is not supported.\n");
+@@ -510,6 +514,7 @@ int main(int argc, char **argv)
  		  if(OPENSSL_VERSION_NUMBER < 0x10000000L) {
  		  	TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "WARNING: OpenSSL version is rather old, DTLS may not be working correctly.\n");
  		  }
@@ -437,7 +438,7 @@ index 8a824cc..cf775e1 100644
  		  root_tls_ctx[root_tls_ctx_num] = SSL_CTX_new(DTLSv1_client_method());
  		  SSL_CTX_set_cipher_list(root_tls_ctx[root_tls_ctx_num], csuite);
  		  root_tls_ctx_num++;
-@@ -514,6 +519,11 @@ int main(int argc, char **argv)
+@@ -518,6 +523,11 @@ int main(int argc, char **argv)
  		  SSL_CTX_set_cipher_list(root_tls_ctx[root_tls_ctx_num], csuite);
  		  root_tls_ctx_num++;
  #endif
@@ -448,12 +449,12 @@ index 8a824cc..cf775e1 100644
 +#endif
  #endif
  		}
- 
-diff --git a/src/client/ns_turn_msg.c b/src/client/ns_turn_msg.c
-index d0c8d88..522550f 100644
---- a/src/client/ns_turn_msg.c
-+++ b/src/client/ns_turn_msg.c
-@@ -2510,10 +2510,10 @@ static int encode_oauth_token_gcm(const uint8_t *server_name, encoded_oauth_toke
+ 	}
+Index: os-coturn/src/client/ns_turn_msg.c
+===================================================================
+--- os-coturn.orig/src/client/ns_turn_msg.c
++++ os-coturn/src/client/ns_turn_msg.c
+@@ -2530,10 +2530,10 @@ static int encode_oauth_token_gcm(const
  #if OPENSSL_VERSION_NUMBER < 0x10100000L
  		EVP_CIPHER_CTX ctx;
  		EVP_CIPHER_CTX *ctxp = &ctx;
@@ -465,7 +466,7 @@ index d0c8d88..522550f 100644
  
  		/* Initialize the encryption operation. */
  		if(1 != EVP_EncryptInit_ex(ctxp, cipher, NULL, NULL, NULL))
-@@ -2604,10 +2604,10 @@ static int decode_oauth_token_gcm(const uint8_t *server_name, const encoded_oaut
+@@ -2624,10 +2624,10 @@ static int decode_oauth_token_gcm(const
  #if OPENSSL_VERSION_NUMBER < 0x10100000L
  		EVP_CIPHER_CTX ctx;
  		EVP_CIPHER_CTX *ctxp = &ctx;
