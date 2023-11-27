@@ -1,8 +1,6 @@
-Index: os-coturn/src/apps/relay/mainrelay.c
-===================================================================
---- os-coturn.orig/src/apps/relay/mainrelay.c
-+++ os-coturn/src/apps/relay/mainrelay.c
-@@ -1084,20 +1084,17 @@ void encrypt_aes_128(unsigned  char* in,
+--- a/src/apps/relay/mainrelay.c
++++ b/src/apps/relay/mainrelay.c
+@@ -1084,20 +1084,17 @@
  
      int j=0,k=0;
      int totalSize=0;
@@ -33,7 +31,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  
      totalSize += strlen((char*)in);
      size = strlen((char*)in);
-@@ -1172,22 +1169,18 @@ int decodedTextSize(char *input){
+@@ -1172,22 +1169,18 @@
  void decrypt_aes_128(char* in, const unsigned char* mykey){
  
      unsigned char iv[8] = {0};
@@ -63,7 +61,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  
      strcat(last,(char*)outdata);
      printf("%s\n",last);
-@@ -2640,7 +2633,7 @@ int main(int argc, char **argv)
+@@ -2640,7 +2633,7 @@
  
  ////////// OpenSSL locking ////////////////////////////////////////
  
@@ -72,7 +70,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  
  static char some_buffer[65536];
  
-@@ -2679,7 +2672,7 @@ unsigned long coturn_id_function(void)
+@@ -2679,7 +2672,7 @@
  
  static int THREAD_setup(void) {
  
@@ -81,7 +79,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  
  	int i;
  
-@@ -2706,7 +2699,7 @@ static int THREAD_setup(void) {
+@@ -2706,7 +2699,7 @@
  int THREAD_cleanup(void);
  int THREAD_cleanup(void) {
  
@@ -90,7 +88,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  
    int i;
  
-@@ -2785,125 +2778,57 @@ static void adjust_key_file_names(void)
+@@ -2785,125 +2778,57 @@
  	if(turn_params.dh_file[0])
  		adjust_key_file_name(turn_params.dh_file,"DH key",0);
  }
@@ -259,7 +257,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  }
  
  static int pem_password_func(char *buf, int size, int rwflag, void *password)
-@@ -2994,12 +2919,16 @@ static void set_ctx(SSL_CTX** out, const
+@@ -2994,12 +2919,16 @@
  	}
  
  	if (!SSL_CTX_use_PrivateKey_file(ctx, turn_params.pkey_file, SSL_FILETYPE_PEM)) {
@@ -276,7 +274,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  	} else {
  		print_abs_file_name(protocol, ": Private key", turn_params.pkey_file);
  	}
-@@ -3054,14 +2983,10 @@ static void set_ctx(SSL_CTX** out, const
+@@ -3054,14 +2983,10 @@
  			}
  
  			{
@@ -292,7 +290,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  				}
  			}
  		}
-@@ -3079,27 +3004,26 @@ static void set_ctx(SSL_CTX** out, const
+@@ -3079,27 +3004,26 @@
  
  	{//DH algorithms:
  
@@ -334,7 +332,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  		}
  
  		/*
-@@ -3110,15 +3034,22 @@ static void set_ctx(SSL_CTX** out, const
+@@ -3110,15 +3034,22 @@
  		}
  		*/
  
@@ -360,7 +358,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  		}
  	}
  
-@@ -3207,8 +3138,10 @@ static void openssl_load_certificates(vo
+@@ -3207,8 +3138,10 @@
  static void openssl_setup(void)
  {
  	THREAD_setup();
@@ -371,7 +369,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  
  #if !TLS_SUPPORTED
  	if(!turn_params.no_tls) {
-@@ -3241,6 +3174,7 @@ static void openssl_load_certificates(vo
+@@ -3241,6 +3174,7 @@
  	pthread_mutex_lock(&turn_params.tls_mutex);
  	if(!turn_params.no_tls) {
  		set_ctx(&turn_params.tls_ctx_ssl23,"SSL23",SSLv23_server_method()); /*compatibility mode */
@@ -379,7 +377,7 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  		if(!turn_params.no_tlsv1) {
  			set_ctx(&turn_params.tls_ctx_v1_0,"TLS1.0",TLSv1_server_method());
  		}
-@@ -3254,6 +3188,7 @@ static void openssl_load_certificates(vo
+@@ -3254,6 +3188,7 @@
  		}
  #endif
  #endif
@@ -387,11 +385,11 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  		TURN_LOG_FUNC(TURN_LOG_LEVEL_INFO, "TLS cipher suite: %s\n",turn_params.cipher_list);
  	}
  
-@@ -3267,9 +3202,11 @@ static void openssl_load_certificates(vo
+@@ -3267,9 +3202,11 @@
  
  #if DTLSv1_2_SUPPORTED
  		set_ctx(&turn_params.dtls_ctx,"DTLS",DTLS_server_method());
-+#if (OPENSSL_VERSION_NUMBER < 0x30000000L
++#if (OPENSSL_VERSION_NUMBER < 0x30000000L)
  		set_ctx(&turn_params.dtls_ctx_v1_2,"DTLS1.2",DTLSv1_2_server_method());
  		SSL_CTX_set_read_ahead(turn_params.dtls_ctx_v1_2, 1);
  		setup_dtls_callbacks(turn_params.dtls_ctx_v1_2);
@@ -399,11 +397,9 @@ Index: os-coturn/src/apps/relay/mainrelay.c
  #else
  		set_ctx(&turn_params.dtls_ctx,"DTLS",DTLSv1_server_method());
  #endif
-Index: os-coturn/src/apps/uclient/mainuclient.c
-===================================================================
---- os-coturn.orig/src/apps/uclient/mainuclient.c
-+++ os-coturn/src/apps/uclient/mainuclient.c
-@@ -474,8 +474,10 @@ int main(int argc, char **argv)
+--- a/src/apps/uclient/mainuclient.c
++++ b/src/apps/uclient/mainuclient.c
+@@ -474,8 +474,10 @@
  
  	if(use_secure) {
  
@@ -414,7 +410,7 @@ Index: os-coturn/src/apps/uclient/mainuclient.c
  
  		const char *csuite = "ALL"; //"AES256-SHA" "DH"
  		if(use_null_cipher)
-@@ -488,6 +490,7 @@ int main(int argc, char **argv)
+@@ -488,6 +490,7 @@
  		  SSL_CTX_set_cipher_list(root_tls_ctx[root_tls_ctx_num], csuite);
  		  root_tls_ctx_num++;
  
@@ -422,7 +418,7 @@ Index: os-coturn/src/apps/uclient/mainuclient.c
  		  root_tls_ctx[root_tls_ctx_num] = SSL_CTX_new(TLSv1_client_method());
  		  SSL_CTX_set_cipher_list(root_tls_ctx[root_tls_ctx_num], csuite);
  		  root_tls_ctx_num++;
-@@ -502,6 +505,7 @@ int main(int argc, char **argv)
+@@ -502,6 +505,7 @@
  		  root_tls_ctx_num++;
  #endif
  #endif
@@ -430,7 +426,7 @@ Index: os-coturn/src/apps/uclient/mainuclient.c
  		} else {
  #if !DTLS_SUPPORTED
  		  fprintf(stderr,"ERROR: DTLS is not supported.\n");
-@@ -510,6 +514,7 @@ int main(int argc, char **argv)
+@@ -510,6 +514,7 @@
  		  if(OPENSSL_VERSION_NUMBER < 0x10000000L) {
  		  	TURN_LOG_FUNC(TURN_LOG_LEVEL_WARNING, "WARNING: OpenSSL version is rather old, DTLS may not be working correctly.\n");
  		  }
@@ -438,7 +434,7 @@ Index: os-coturn/src/apps/uclient/mainuclient.c
  		  root_tls_ctx[root_tls_ctx_num] = SSL_CTX_new(DTLSv1_client_method());
  		  SSL_CTX_set_cipher_list(root_tls_ctx[root_tls_ctx_num], csuite);
  		  root_tls_ctx_num++;
-@@ -518,6 +523,11 @@ int main(int argc, char **argv)
+@@ -518,6 +523,11 @@
  		  SSL_CTX_set_cipher_list(root_tls_ctx[root_tls_ctx_num], csuite);
  		  root_tls_ctx_num++;
  #endif
@@ -450,11 +446,9 @@ Index: os-coturn/src/apps/uclient/mainuclient.c
  #endif
  		}
  	}
-Index: os-coturn/src/client/ns_turn_msg.c
-===================================================================
---- os-coturn.orig/src/client/ns_turn_msg.c
-+++ os-coturn/src/client/ns_turn_msg.c
-@@ -2530,10 +2530,10 @@ static int encode_oauth_token_gcm(const
+--- a/src/client/ns_turn_msg.c
++++ b/src/client/ns_turn_msg.c
+@@ -2530,10 +2530,10 @@
  #if OPENSSL_VERSION_NUMBER < 0x10100000L
  		EVP_CIPHER_CTX ctx;
  		EVP_CIPHER_CTX *ctxp = &ctx;
@@ -466,7 +460,7 @@ Index: os-coturn/src/client/ns_turn_msg.c
  
  		/* Initialize the encryption operation. */
  		if(1 != EVP_EncryptInit_ex(ctxp, cipher, NULL, NULL, NULL))
-@@ -2624,10 +2624,10 @@ static int decode_oauth_token_gcm(const
+@@ -2624,10 +2624,10 @@
  #if OPENSSL_VERSION_NUMBER < 0x10100000L
  		EVP_CIPHER_CTX ctx;
  		EVP_CIPHER_CTX *ctxp = &ctx;
