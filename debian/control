@@ -1,7 +1,7 @@
 Source: coturn
 Section: net
 Priority: optional
-Maintainer: Debian VoIP Team <pkg-voip-maintainers@alioth-lists.debian.net>
+Maintainer: Debian VoIP Team <pkg-voip-maintainers@lists.alioth.debian.org>
 Uploaders: Oleg Moskalenko <mom040267@gmail.com>,
            Mészáros Mihály <misi@majd.eu>
 Build-Depends: debhelper-compat (= 13),
@@ -9,7 +9,7 @@ Build-Depends: debhelper-compat (= 13),
                default-mysql-client,
                dpkg-dev (>= 1.16.1~),
                libsystemd-dev [linux-any],
-               pkg-config,
+               pkgconf,
                libevent-dev (>= 2.0.1~),
                libhiredis-dev,
                libpq-dev,
@@ -19,8 +19,8 @@ Build-Depends: debhelper-compat (= 13),
                sqlite3
 Standards-Version: 4.5.1
 Homepage: https://github.com/coturn/coturn/
-Vcs-Git: https://github.com/coturn/coturn.git -b debian/master
-Vcs-Browser: https://github.com/coturn/coturn/tree/debian/master
+Vcs-Git: https://salsa.debian.org/pkg-voip-team/coturn.git
+Vcs-Browser: https://salsa.debian.org/pkg-voip-team/coturn
 Rules-Requires-Root: no
 
 Package: coturn
@@ -28,7 +28,6 @@ Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: adduser,
          sqlite3,
-         lsb-base (>= 3.0-6),
          telnet | telnet-client,
          ${misc:Depends},
          ${shlibs:Depends}
