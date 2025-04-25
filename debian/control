@@ -20,7 +20,7 @@ Homepage: https://github.com/coturn/coturn/
 Vcs-Git: https://github.com/coturn/coturn.git -b debian/master
 Vcs-Browser: https://github.com/coturn/coturn/tree/debian/master
 Rules-Requires-Root: no
-XS-Pexip-Upstream: http://deb.debian.org/debian/ bookworm
+XS-Pexip-Upstream: http://deb.debian.org/debian/ trixie
 
 Package: coturn
 Architecture: any
