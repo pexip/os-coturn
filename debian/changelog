@@ -1,3 +1,16 @@
+coturn (4.6.1-2) unstable; urgency=medium
+
+  * Team upload
+  * [72b4051] gbp: Remove DEFAULT rules
+  * [e8cd8e1] Use common VoIP Team name
+  * [5c6af2b] Link to common team Vcs (Closes: #960919)
+  * [115af22] Drop default CI config
+  * [f63dcdf] Fix lintian: depends-on-obsolete-package
+  * [062f3bf] Drop useless lintian overrides
+  * [22048fc] d/copyright: clean up
+
+ -- Bastian Germann <bage@debian.org>  Sat, 13 Apr 2024 13:50:36 +0000
+
 coturn (4.6.1-1+pexip24u3) pexip-bookworm; urgency=medium
 
   * New versioning scheme
