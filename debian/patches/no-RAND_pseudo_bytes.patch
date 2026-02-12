@@ -1,3 +1,7 @@
+Add patch to s/RAND_pseudo_bytes/RAND_bytes/
+
+The former was deprecated in OpenSSL 1.1.0
+
 diff --git a/src/client/ns_turn_msg.c b/src/client/ns_turn_msg.c
 index d0c8d88..3319536 100644
 --- a/src/client/ns_turn_msg.c

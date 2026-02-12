@@ -1,3 +1,5 @@
+Disable support for HTTP the CLI
+
 --- a/src/server/ns_turn_server.c
 +++ b/src/server/ns_turn_server.c
 @@ -4630,6 +4630,10 @@
