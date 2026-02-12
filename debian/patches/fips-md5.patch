@@ -1,3 +1,5 @@
+Rework use of MD5 with FIPS
+
 diff --git a/src/apps/common/ns_turn_openssl.h b/src/apps/common/ns_turn_openssl.h
 index 8272f99..7d793f3 100644
 --- a/src/apps/common/ns_turn_openssl.h
